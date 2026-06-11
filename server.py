@@ -12,6 +12,61 @@ import printer
 import scale
 
 
+DEFAULT_CONFIG = {
+    "scale": {
+        "protocol": "auto",
+        "port": "auto",
+        "baudrate": 9600,
+        "bytesize": 8,
+        "parity": "N",
+        "stopbits": 1,
+        "poll_command_hex": "",
+        "poll_interval": 0.3,
+    },
+    "printer": {
+        "name": "",
+        "mode": "tspl",
+        "dpi": 203,
+        "label_width_mm": 58,
+        "label_height_mm": 40,
+        "gap_mm": 2,
+        "copies": 1,
+    },
+    "barcode": {"type": "ean13", "prefix": "22"},
+    "company": {
+        "name": "ООО \"Птицефабрика\"",
+        "address": "г. Ташкент, ул. Примерная, 1",
+        "inn": "ИНН 123456789",
+        "phone": "+998 90 000-00-00",
+    },
+    "server": {"host": "127.0.0.1", "port": 8077, "open_browser": True},
+}
+
+DEFAULT_PRODUCTS = [
+    {"plu": 1, "name": "Филе куриное", "shelf_days": 5, "tare_g": 10},
+    {"plu": 2, "name": "Голень с кожей", "shelf_days": 5, "tare_g": 10},
+    {"plu": 3, "name": "Крылышки", "shelf_days": 5, "tare_g": 10},
+    {"plu": 4, "name": "Тушка цыпленка", "shelf_days": 7, "tare_g": 15},
+    {"plu": 5, "name": "Бедро куриное", "shelf_days": 5, "tare_g": 10},
+    {"plu": 6, "name": "Грудка на кости", "shelf_days": 5, "tare_g": 10},
+    {"plu": 7, "name": "Фарш куриный", "shelf_days": 3, "tare_g": 12},
+    {"plu": 8, "name": "Печень куриная", "shelf_days": 3, "tare_g": 12},
+    {"plu": 9, "name": "Желудки куриные", "shelf_days": 3, "tare_g": 12},
+    {"plu": 10, "name": "Сердечки куриные", "shelf_days": 3, "tare_g": 12},
+]
+
+
+def _merge_defaults(cfg, defaults):
+    """Дополняет конфиг недостающими ключами из значений по умолчанию."""
+    out = dict(defaults)
+    for k, v in (cfg or {}).items():
+        if isinstance(v, dict) and isinstance(defaults.get(k), dict):
+            out[k] = _merge_defaults(v, defaults[k])
+        else:
+            out[k] = v
+    return out
+
+
 def base_dir():
     """Папка с exe (PyInstaller) или с исходниками."""
     if getattr(sys, "frozen", False):
@@ -24,23 +79,58 @@ def resource_dir():
     return getattr(sys, "_MEIPASS", base_dir())
 
 
-def load_json(name, default):
+def save_json(name, obj):
     path = os.path.join(base_dir(), name)
-    if not os.path.exists(path):
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(default, f, ensure_ascii=False, indent=2)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(obj, f, ensure_ascii=False, indent=2)
+
+
+def load_json(name, default):
+    """Читает файл; если его нет или он битый - создаёт со значениями по умолчанию."""
+    path = os.path.join(base_dir(), name)
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        save_json(name, default)
         return default
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
 
 
 class App:
     def __init__(self):
-        self.cfg = load_json("config.json", {})
-        self.products = load_json("products.json", [])
+        self.cfg = _merge_defaults(load_json("config.json", DEFAULT_CONFIG), DEFAULT_CONFIG)
+        self.products = load_json("products.json", DEFAULT_PRODUCTS)
         self.reader = scale.ScaleReader(self.cfg.get("scale", {}))
         self.reader.start()
         self.print_lock = threading.Lock()
+
+    def save_config(self, new_cfg):
+        """Сохраняет настройки; при смене параметров весов перезапускает чтение."""
+        new_cfg = _merge_defaults(new_cfg, DEFAULT_CONFIG)
+        scale_changed = new_cfg.get("scale") != self.cfg.get("scale")
+        self.cfg = new_cfg
+        save_json("config.json", new_cfg)
+        if scale_changed:
+            self.reader.stop()
+            self.reader = scale.ScaleReader(new_cfg["scale"])
+            self.reader.start()
+
+    def save_products(self, products):
+        cleaned = []
+        for p in products:
+            name = str(p.get("name", "")).strip()
+            if not name:
+                continue
+            cleaned.append({
+                "plu": int(p.get("plu", 0)) or len(cleaned) + 1,
+                "name": name,
+                "shelf_days": max(1, int(p.get("shelf_days", 5))),
+                "tare_g": max(0, int(p.get("tare_g", 0))),
+            })
+        if not cleaned:
+            raise ValueError("список товаров пуст")
+        self.products = cleaned
+        save_json("products.json", cleaned)
 
     # ------------------------------------------------------------- печать
     def build_label_data(self, req):
@@ -133,13 +223,19 @@ def make_handler(app: App):
                 self._json({"ok": False, "error": str(e)}, 400)
 
         def do_POST(self):
-            if self.path == "/api/print":
-                try:
+            try:
+                if self.path == "/api/print":
                     self._json(app.do_print(self._read_body()))
-                except Exception as e:
-                    self._json({"ok": False, "error": str(e)}, 400)
-            else:
-                self.send_error(404)
+                elif self.path == "/api/config":
+                    app.save_config(self._read_body())
+                    self._json({"ok": True})
+                elif self.path == "/api/products":
+                    app.save_products(self._read_body())
+                    self._json({"ok": True})
+                else:
+                    self.send_error(404)
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)}, 400)
 
         def _file(self, path, ctype):
             try:
