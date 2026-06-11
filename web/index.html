@@ -84,6 +84,7 @@
     <div><label>Принтер</label><select id="cfgPrinter"></select></div>
     <div><label>Режим печати</label>
       <select id="cfgMode">
+        <option value="escpos">ESC/POS (чековый / встроенный в POS)</option>
         <option value="tspl">TSPL (Xprinter и кит. принтеры)</option>
         <option value="zpl">ZPL (Zebra)</option>
         <option value="windows">Драйвер Windows</option>
@@ -94,6 +95,16 @@
         <input id="cfgLw" type="number" min="20" max="120" value="58">
         <input id="cfgLh" type="number" min="20" max="120" value="40">
       </div></div>
+  </div>
+  <div class="row3">
+    <div><label>Подключение принтера</label><select id="cfgPPort"></select></div>
+    <div><label>Скорость порта принтера</label>
+      <select id="cfgPBaud">
+        <option>9600</option><option>19200</option><option>38400</option>
+        <option>57600</option><option>115200</option>
+      </select></div>
+    <div><label>Копий этикетки</label>
+      <input id="cfgCopies" type="number" min="1" max="10" value="1"></div>
   </div>
   <h2>Производитель (печатается на этикетке)</h2>
   <div class="grid">
@@ -110,6 +121,7 @@
   </table>
   <div class="btnRow">
     <button id="addProdBtn">+ Добавить товар</button>
+    <button id="testBtn" style="background:#243246;color:#b9c6d4">🖨 Тест печати</button>
     <button id="saveBtn">💾 Сохранить настройки</button>
   </div>
   <div id="setupStatus"></div>
@@ -276,6 +288,11 @@ async function openSettings() {
     setup.printers.map(n => `<option value="${n}">${n}</option>`).join('');
   $('cfgPrinter').value = setup.printers.includes(pr.name) ? pr.name : '';
   $('cfgMode').value = pr.mode;
+  $('cfgPPort').innerHTML = '<option value="">через драйвер Windows</option>' +
+    setup.ports.map(p => `<option value="${p.port}">напрямую: ${p.port} — ${p.desc}</option>`).join('');
+  $('cfgPPort').value = setup.ports.some(p => p.port === pr.port) ? pr.port : '';
+  $('cfgPBaud').value = pr.baudrate || 9600;
+  $('cfgCopies').value = pr.copies || 1;
   $('cfgLw').value = pr.label_width_mm; $('cfgLh').value = pr.label_height_mm;
   $('cfgCName').value = co.name; $('cfgCAddr').value = co.address;
   $('cfgCInn').value = co.inn; $('cfgCPhone').value = co.phone;
@@ -291,6 +308,15 @@ $('settingsBtn').onclick = () => {
 
 $('addProdBtn').onclick = () => $('prodRows').appendChild(prodRow({plu: '', shelf_days: 5, tare_g: 10}));
 
+$('testBtn').onclick = async () => {
+  const st = $('setupStatus'); st.className = ''; st.textContent = 'печать теста…';
+  try {
+    const r = await (await fetch('/api/testprint', {method: 'POST'})).json();
+    if (!r.ok) throw new Error(r.error);
+    st.className = 'ok'; st.textContent = '✓ ' + r.message + ' — рамка должна совпасть с краями этикетки';
+  } catch (e) { st.className = 'err'; st.textContent = '✗ ' + e.message; }
+};
+
 $('saveBtn').onclick = async () => {
   const st = $('setupStatus'); st.className = ''; st.textContent = 'сохранение…';
   try {
@@ -299,6 +325,9 @@ $('saveBtn').onclick = async () => {
     cfg.scale.baudrate = +$('cfgBaud').value;
     cfg.printer.name = $('cfgPrinter').value;
     cfg.printer.mode = $('cfgMode').value;
+    cfg.printer.port = $('cfgPPort').value;
+    cfg.printer.baudrate = +$('cfgPBaud').value || 9600;
+    cfg.printer.copies = Math.max(1, +$('cfgCopies').value || 1);
     cfg.printer.label_width_mm = +$('cfgLw').value || 58;
     cfg.printer.label_height_mm = +$('cfgLh').value || 40;
     cfg.company = { name: $('cfgCName').value, address: $('cfgCAddr').value,

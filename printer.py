@@ -1,6 +1,8 @@
 """Печать этикетки.
 
 Режимы (config.json -> printer.mode):
+  escpos  - растровая печать ESC/POS (чековые принтеры и встроенные
+            термопринтеры китайских POS-моноблоков)
   tspl    - картинка отправляется RAW-командой BITMAP (TSPL/TSPL2: Xprinter,
             Gprinter, HPRT, Atol и почти все китайские термопринтеры)
   zpl     - то же для Zebra-совместимых (команда ^GFA)
@@ -16,6 +18,11 @@ try:
     from PIL import ImageWin
 except ImportError:
     win32print = None
+
+try:
+    import serial
+except ImportError:
+    serial = None
 
 from PIL import Image
 
@@ -34,6 +41,17 @@ def _printer_name(cfg):
     if win32print is None:
         raise RuntimeError("pywin32 недоступен")
     return win32print.GetDefaultPrinter()
+
+
+def _serial_print(cfg, payload: bytes):
+    """Прямая печать на принтер, подключённый через COM-порт (минуя Windows)."""
+    if serial is None:
+        raise RuntimeError("pyserial не установлен")
+    p = cfg["printer"]
+    with serial.Serial(port=p["port"], baudrate=int(p.get("baudrate", 9600)),
+                       timeout=3, write_timeout=10) as ser:
+        ser.write(payload)
+        ser.flush()
 
 
 def _raw_print(printer_name: str, payload: bytes, doc="tarozu label"):
@@ -83,6 +101,37 @@ def _zpl(img, cfg) -> bytes:
     ).encode("ascii")
 
 
+def _escpos(img: Image.Image, cfg) -> bytes:
+    p = cfg["printer"]
+    width = int(p.get("escpos_width_dots", 384))  # 384 точки = 58-мм чековый
+    if img.width > width:
+        img = img.resize((width, max(1, round(img.height * width / img.width))), Image.LANCZOS)
+    wb, h, data = _img_rows(img)
+    raster = bytes(b ^ 0xFF for b in data)  # в ESC/POS бит 1 - чёрный
+    if p.get("gap_feed", False):
+        # FF: протяжка до следующей этикетки по датчику зазора (если поддерживается)
+        tail = b"\x0c"
+    else:
+        # без датчика: докручиваем ленту так, чтобы печать занимала ровно
+        # один шаг этикетки (высота + зазор) - тогда позиция не уползает
+        pitch = int(round((p["label_height_mm"] + p.get("gap_mm", 2)) * 8))
+        rest = max(0, pitch - h)
+        tail = b""
+        while rest > 0:
+            n = min(255, rest)
+            tail += b"\x1bJ" + bytes((n,))  # ESC J n - прогон на n точек
+            rest -= n
+    one = (
+        b"\x1b@"                                   # сброс
+        + b"\x1dv0\x00"                            # GS v 0: растровое изображение
+        + bytes((wb % 256, wb // 256, h % 256, h // 256))
+        + raster
+        + tail
+        + (b"\x1bi" if p.get("cut", True) else b"")  # ESC i - отрез (если есть резак)
+    )
+    return one * max(1, int(p.get("copies", 1)))
+
+
 def _windows_gdi(img, printer_name):
     hdc = win32ui.CreateDC()
     hdc.CreatePrinterDC(printer_name)
@@ -96,14 +145,21 @@ def _windows_gdi(img, printer_name):
 
 
 def print_label(img: Image.Image, cfg) -> str:
-    mode = cfg["printer"].get("mode", "tspl")
+    mode = cfg["printer"].get("mode", "escpos")
+    com_port = (cfg["printer"].get("port") or "").strip()
+    if com_port and mode in ("escpos", "tspl", "zpl"):
+        payload = {"escpos": _escpos, "tspl": _tspl, "zpl": _zpl}[mode](img, cfg)
+        _serial_print(cfg, payload)
+        return f"отправлено на принтер ({com_port})"
     if mode == "file" or win32print is None:
         out = os.path.join(os.path.dirname(os.path.abspath(
             sys.executable if getattr(sys, "frozen", False) else __file__)), "label.png")
         img.save(out)
         return f"принтер недоступен, этикетка сохранена: {out}" if mode != "file" else f"сохранено: {out}"
     name = _printer_name(cfg)
-    if mode == "tspl":
+    if mode == "escpos":
+        _raw_print(name, _escpos(img, cfg))
+    elif mode == "tspl":
         _raw_print(name, _tspl(img, cfg))
     elif mode == "zpl":
         _raw_print(name, _zpl(img, cfg))

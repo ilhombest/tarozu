@@ -25,7 +25,12 @@ DEFAULT_CONFIG = {
     },
     "printer": {
         "name": "",
-        "mode": "tspl",
+        "port": "",
+        "baudrate": 9600,
+        "cut": True,
+        "gap_feed": False,
+        "mode": "escpos",
+        "escpos_width_dots": 384,
         "dpi": 203,
         "label_width_mm": 58,
         "label_height_mm": 40,
@@ -100,20 +105,41 @@ class App:
     def __init__(self):
         self.cfg = _merge_defaults(load_json("config.json", DEFAULT_CONFIG), DEFAULT_CONFIG)
         self.products = load_json("products.json", DEFAULT_PRODUCTS)
-        self.reader = scale.ScaleReader(self.cfg.get("scale", {}))
+        self.reader = scale.ScaleReader(self._scale_cfg(self.cfg))
         self.reader.start()
         self.print_lock = threading.Lock()
+
+    @staticmethod
+    def _scale_cfg(cfg):
+        # порт принтера исключаем из автопоиска весов, чтобы их не перепутать
+        sc = dict(cfg.get("scale", {}))
+        sc["exclude_port"] = cfg.get("printer", {}).get("port", "")
+        return sc
 
     def save_config(self, new_cfg):
         """Сохраняет настройки; при смене параметров весов перезапускает чтение."""
         new_cfg = _merge_defaults(new_cfg, DEFAULT_CONFIG)
-        scale_changed = new_cfg.get("scale") != self.cfg.get("scale")
+        scale_changed = self._scale_cfg(new_cfg) != self._scale_cfg(self.cfg)
         self.cfg = new_cfg
         save_json("config.json", new_cfg)
         if scale_changed:
             self.reader.stop()
-            self.reader = scale.ScaleReader(new_cfg["scale"])
+            self.reader = scale.ScaleReader(self._scale_cfg(new_cfg))
             self.reader.start()
+
+    def do_testprint(self):
+        """Печатает рамку по размеру этикетки - для калибровки положения."""
+        from PIL import Image, ImageDraw
+        p = self.cfg["printer"]
+        w, h = int(p["label_width_mm"] * 8), int(p["label_height_mm"] * 8)
+        img = Image.new("1", (w, h), 1)
+        d = ImageDraw.Draw(img)
+        d.rectangle([0, 0, w - 1, h - 1], outline=0, width=4)
+        d.line([0, 0, w - 1, h - 1], fill=0, width=2)
+        d.line([w - 1, 0, 0, h - 1], fill=0, width=2)
+        with self.print_lock:
+            msg = printer.print_label(img, self.cfg)
+        return {"ok": True, "message": msg}
 
     def save_products(self, products):
         cleaned = []
@@ -232,6 +258,8 @@ def make_handler(app: App):
                 elif self.path == "/api/products":
                     app.save_products(self._read_body())
                     self._json({"ok": True})
+                elif self.path == "/api/testprint":
+                    self._json(app.do_testprint())
                 else:
                     self.send_error(404)
             except Exception as e:

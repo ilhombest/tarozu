@@ -11,7 +11,12 @@
   },
   "printer": {
     "name": "",
-    "mode": "tspl",
+    "port": "COM5",
+    "baudrate": 9600,
+    "cut": true,
+    "gap_feed": false,
+    "mode": "escpos",
+    "escpos_width_dots": 384,
     "dpi": 203,
     "label_width_mm": 58,
     "label_height_mm": 40,
