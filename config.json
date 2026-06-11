@@ -1,6 +1,6 @@
 {
   "scale": {
-    "protocol": "demo",
+    "protocol": "auto",
     "port": "auto",
     "baudrate": 9600,
     "bytesize": 8,
@@ -31,6 +31,6 @@
   "server": {
     "host": "127.0.0.1",
     "port": 8077,
-    "open_browser": false
+    "open_browser": true
   }
 }
