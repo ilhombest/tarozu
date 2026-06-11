@@ -133,17 +133,17 @@ def _escpos(img: Image.Image, cfg) -> bytes:
     return one * max(1, int(p.get("copies", 1)))
 
 
-def _windows_gdi(img, printer_name, off_x_mm=0.0, off_y_mm=0.0):
+def _windows_gdi(img, printer_name, off_x_mm=0.0, off_y_mm=0.0, src_dpi=203):
     hdc = win32ui.CreateDC()
     hdc.CreatePrinterDC(printer_name)
-    # вписываем в печатную область с сохранением пропорций (8=HORZRES, 10=VERTRES)
-    pw, ph = hdc.GetDeviceCaps(8), hdc.GetDeviceCaps(10)
-    dpix, dpiy = hdc.GetDeviceCaps(88), hdc.GetDeviceCaps(90)  # LOGPIXELSX/Y
-    k = min(pw / img.width, ph / img.height)
+    pw, ph = hdc.GetDeviceCaps(8), hdc.GetDeviceCaps(10)        # HORZRES/VERTRES
+    dpix, dpiy = hdc.GetDeviceCaps(88) or 203, hdc.GetDeviceCaps(90) or 203
+    # печатаем в истинном размере (мм в мм): пересчёт из DPI рендера в DPI
+    # принтера; если этикетка больше листа - ужимаем, но не растягиваем
+    k = min(dpix / src_dpi, pw / img.width, ph / img.height)
     w, h = max(1, int(img.width * k)), max(1, int(img.height * k))
-    # сдвиг задаём в точках устройства относительно реального DPI принтера
-    ox = int(round(off_x_mm / 25.4 * (dpix or 203)))
-    oy = int(round(off_y_mm / 25.4 * (dpiy or 203)))
+    ox = int(round(off_x_mm / 25.4 * dpix))
+    oy = int(round(off_y_mm / 25.4 * dpiy))
     hdc.StartDoc("tarozu label")
     hdc.StartPage()
     dib = ImageWin.Dib(img.convert("RGB"))
@@ -187,7 +187,7 @@ def print_label(img: Image.Image, cfg) -> str:
         _raw_print(name, _zpl(img, cfg))
     elif mode == "windows":
         for _ in range(max(1, int(p.get("copies", 1)))):
-            _windows_gdi(img, name, off_x_mm, off_y_mm)
+            _windows_gdi(img, name, off_x_mm, off_y_mm, int(p.get("dpi", 203)))
     else:
         raise ValueError(f"неизвестный режим печати: {mode}")
     return f"отправлено на принтер: {name}"

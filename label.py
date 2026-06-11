@@ -85,13 +85,14 @@ def render_label(cfg, data) -> Image.Image:
     dots_mm = p.get("dpi", 203) / 25.4
     W = int(p.get("label_width_mm", 58) * dots_mm)
     H = int(p.get("label_height_mm", 40) * dots_mm)
+    fs = max(0.3, min(3.0, float(p.get("font_scale", 100)) / 100))  # масштаб шрифта
     img = Image.new("1", (W, H), 1)
     d = ImageDraw.Draw(img)
     pad = int(1.5 * dots_mm)
 
     # --- верх: название продукта
     name = data["name"]
-    f_name = _fit_text(d, name, W - 2 * pad, int(H * 0.14))
+    f_name = _fit_text(d, name, W - 2 * pad, int(H * 0.14 * fs), min_size=max(8, int(14 * fs)))
     tw = d.textlength(name, font=f_name)
     y = pad
     d.text(((W - tw) // 2, y), name, font=f_name, fill=0)
@@ -106,19 +107,19 @@ def render_label(cfg, data) -> Image.Image:
     gross = data["gross_g"] / 1000
     line_net = f"НЕТТО: {net:.3f} кг"
     line_gross = f"БРУТТО: {gross:.3f} кг"
-    f_w = _fit_text(d, line_gross, split - pad - 4, int(mid_h * 0.34))
+    f_w = _fit_text(d, line_gross, split - pad - 4, int(mid_h * 0.34 * fs), min_size=max(8, int(14 * fs)))
     d.text((pad, y + 2), line_net, font=f_w, fill=0)
     d.text((pad, y + 2 + int(mid_h * 0.45)), line_gross, font=f_w, fill=0)
     d.line([split, y, split, y + mid_h], fill=0, width=1)
 
     comp = cfg["company"]
-    f_c = _font(max(12, int(mid_h * 0.20)), bold=False)
+    f_c = _font(max(8, int(mid_h * 0.20 * fs)), bold=False)
     cy = y
     for line in (comp.get("name", ""), comp.get("address", ""),
                  comp.get("inn", ""), comp.get("phone", "")):
         if not line:
             continue
-        f_line = _fit_text(d, line, W - split - 2 * pad, f_c.size, 10, bold=False)
+        f_line = _fit_text(d, line, W - split - 2 * pad, f_c.size, max(7, int(10 * fs)), bold=False)
         d.text((split + pad // 2, cy), line, font=f_line, fill=0)
         cy += f_line.size + 2
     y += mid_h
@@ -126,15 +127,15 @@ def render_label(cfg, data) -> Image.Image:
 
     # --- штрихкод
     bc_h = int(H * 0.30)
-    f_bc = _font(max(14, int(bc_h * 0.22)), bold=False)
+    f_bc = _font(max(10, int(bc_h * 0.22 * fs)), bold=False)
     _draw_barcode(img, d, data["barcode_value"], cfg["barcode"].get("type", "ean13"),
                   pad, W - pad, y + 4, y + bc_h, f_bc)
     y += bc_h + 6
     d.line([pad, y, W - pad, y], fill=0, width=2)
 
     # --- низ: даты
-    f_d = _font(max(14, int(H * 0.065)))
+    f_d = _font(max(9, int(H * 0.065 * fs)))
     line = f"Изгот.: {data['prod_date']}   Годен до: {data['exp_date']}"
-    f_d = _fit_text(d, line, W - 2 * pad, f_d.size)
+    f_d = _fit_text(d, line, W - 2 * pad, f_d.size, min_size=max(8, int(14 * fs)))
     d.text((pad, y + 4), line, font=f_d, fill=0)
     return img
