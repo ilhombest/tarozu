@@ -133,35 +133,42 @@ def _escpos(img: Image.Image, cfg) -> bytes:
     return one * max(1, int(p.get("copies", 1)))
 
 
-def _windows_gdi(img, printer_name):
+def _windows_gdi(img, printer_name, off_x_mm=0.0, off_y_mm=0.0):
     hdc = win32ui.CreateDC()
     hdc.CreatePrinterDC(printer_name)
     # вписываем в печатную область с сохранением пропорций (8=HORZRES, 10=VERTRES)
     pw, ph = hdc.GetDeviceCaps(8), hdc.GetDeviceCaps(10)
+    dpix, dpiy = hdc.GetDeviceCaps(88), hdc.GetDeviceCaps(90)  # LOGPIXELSX/Y
     k = min(pw / img.width, ph / img.height)
     w, h = max(1, int(img.width * k)), max(1, int(img.height * k))
+    # сдвиг задаём в точках устройства относительно реального DPI принтера
+    ox = int(round(off_x_mm / 25.4 * (dpix or 203)))
+    oy = int(round(off_y_mm / 25.4 * (dpiy or 203)))
     hdc.StartDoc("tarozu label")
     hdc.StartPage()
     dib = ImageWin.Dib(img.convert("RGB"))
-    dib.draw(hdc.GetHandleOutput(), (0, 0, w, h))
+    dib.draw(hdc.GetHandleOutput(), (ox, oy, ox + w, oy + h))
     hdc.EndPage()
     hdc.EndDoc()
     hdc.DeleteDC()
 
 
 def print_label(img: Image.Image, cfg) -> str:
-    mode = cfg["printer"].get("mode", "escpos")
-    rot = int(cfg["printer"].get("rotate", 0)) % 360
+    p = cfg["printer"]
+    mode = p.get("mode", "escpos")
+    rot = int(p.get("rotate", 0)) % 360
     if rot:
         img = img.rotate(-rot, expand=True, fillcolor=1)
-    # калибровочный сдвиг: положительный - вправо/вниз, отрицательный - влево/вверх
-    ox = int(round(float(cfg["printer"].get("offset_x_mm", 0)) * 8))
-    oy = int(round(float(cfg["printer"].get("offset_y_mm", 0)) * 8))
-    if ox or oy:
+    off_x_mm = float(p.get("offset_x_mm", 0))
+    off_y_mm = float(p.get("offset_y_mm", 0))
+    com_port = (p.get("port") or "").strip()
+    # для растровых режимов (8 точек/мм) сдвиг делаем подкладкой белого поля;
+    # для драйвера Windows - смещением точки печати (картинка масштабируется)
+    if mode != "windows" and (off_x_mm or off_y_mm):
+        ox, oy = int(round(off_x_mm * 8)), int(round(off_y_mm * 8))
         canvas = Image.new("1", (img.width + max(0, ox), img.height + max(0, oy)), 1)
-        canvas.paste(img.convert("1"), (ox, oy))
+        canvas.paste(img.convert("1"), (max(0, ox), max(0, oy)))
         img = canvas
-    com_port = (cfg["printer"].get("port") or "").strip()
     if com_port and mode in ("escpos", "tspl", "zpl"):
         payload = {"escpos": _escpos, "tspl": _tspl, "zpl": _zpl}[mode](img, cfg)
         _serial_print(cfg, payload)
@@ -179,8 +186,8 @@ def print_label(img: Image.Image, cfg) -> str:
     elif mode == "zpl":
         _raw_print(name, _zpl(img, cfg))
     elif mode == "windows":
-        for _ in range(max(1, int(cfg["printer"].get("copies", 1)))):
-            _windows_gdi(img, name)
+        for _ in range(max(1, int(p.get("copies", 1)))):
+            _windows_gdi(img, name, off_x_mm, off_y_mm)
     else:
         raise ValueError(f"неизвестный режим печати: {mode}")
     return f"отправлено на принтер: {name}"
