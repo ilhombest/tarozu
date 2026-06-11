@@ -135,10 +135,14 @@ def _escpos(img: Image.Image, cfg) -> bytes:
 def _windows_gdi(img, printer_name):
     hdc = win32ui.CreateDC()
     hdc.CreatePrinterDC(printer_name)
+    # вписываем в печатную область с сохранением пропорций (8=HORZRES, 10=VERTRES)
+    pw, ph = hdc.GetDeviceCaps(8), hdc.GetDeviceCaps(10)
+    k = min(pw / img.width, ph / img.height)
+    w, h = max(1, int(img.width * k)), max(1, int(img.height * k))
     hdc.StartDoc("tarozu label")
     hdc.StartPage()
     dib = ImageWin.Dib(img.convert("RGB"))
-    dib.draw(hdc.GetHandleOutput(), (0, 0, img.width, img.height))
+    dib.draw(hdc.GetHandleOutput(), (0, 0, w, h))
     hdc.EndPage()
     hdc.EndDoc()
     hdc.DeleteDC()
@@ -146,6 +150,9 @@ def _windows_gdi(img, printer_name):
 
 def print_label(img: Image.Image, cfg) -> str:
     mode = cfg["printer"].get("mode", "escpos")
+    rot = int(cfg["printer"].get("rotate", 0)) % 360
+    if rot:
+        img = img.rotate(-rot, expand=True, fillcolor=1)
     com_port = (cfg["printer"].get("port") or "").strip()
     if com_port and mode in ("escpos", "tspl", "zpl"):
         payload = {"escpos": _escpos, "tspl": _tspl, "zpl": _zpl}[mode](img, cfg)

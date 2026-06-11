@@ -29,6 +29,7 @@ DEFAULT_CONFIG = {
         "baudrate": 9600,
         "cut": True,
         "gap_feed": False,
+        "rotate": 0,
         "mode": "escpos",
         "escpos_width_dots": 384,
         "dpi": 203,
