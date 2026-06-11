@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tarozu — весы и печать этикеток</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { font-family: "Segoe UI", Arial, sans-serif; background: #10151c; color: #e8edf2;
+         display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 16px; }
+  h1 { font-size: 20px; font-weight: 600; color: #8fa3b8; margin-bottom: 12px; }
+  .panel { background: #1a2230; border-radius: 14px; padding: 18px 22px; width: 100%;
+           max-width: 760px; margin-bottom: 14px; }
+  #weight { font-size: 14vw; max-font-size: 120px; line-height: 1.05; font-weight: 700;
+            text-align: center; font-variant-numeric: tabular-nums; }
+  @media (min-width: 900px) { #weight { font-size: 120px; } }
+  #weight.stable { color: #5ad87a; }
+  #weight.moving { color: #f0c33c; }
+  #weight.offline { color: #e25555; font-size: 36px; }
+  .sub { text-align: center; color: #8fa3b8; font-size: 15px; margin-top: 4px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+  label { display: block; font-size: 13px; color: #8fa3b8; margin-bottom: 4px; }
+  select, input { width: 100%; padding: 10px; font-size: 17px; border-radius: 8px;
+                  border: 1px solid #2c3a4f; background: #0f1622; color: #e8edf2; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px 16px; margin-top: 12px; }
+  #printBtn { width: 100%; margin-top: 16px; padding: 18px; font-size: 24px; font-weight: 700;
+              border: none; border-radius: 10px; background: #2f7df6; color: #fff; cursor: pointer; }
+  #printBtn:active { transform: scale(.99); }
+  #printBtn:disabled { background: #3a4a60; cursor: wait; }
+  #status { margin-top: 10px; text-align: center; min-height: 22px; font-size: 15px; }
+  #status.ok { color: #5ad87a; } #status.err { color: #e25555; }
+  .netline { display: flex; justify-content: space-around; margin-top: 8px; font-size: 18px; color: #b9c6d4; }
+  #previewWrap { text-align: center; }
+  #preview { max-width: 100%; background: #fff; border-radius: 6px; min-height: 60px; }
+  details summary { cursor: pointer; color: #8fa3b8; }
+</style>
+</head>
+<body>
+<h1>TAROZU — весовой терминал</h1>
+
+<div class="panel">
+  <div id="weight" class="offline">нет связи с весами…</div>
+  <div class="sub" id="scaleInfo"></div>
+  <div class="netline">
+    <span>Брутто: <b id="grossTxt">—</b></span>
+    <span>Тара: <b id="tareTxt">—</b></span>
+    <span>Нетто: <b id="netTxt">—</b></span>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="grid">
+    <div>
+      <label>Продукт</label>
+      <select id="product"></select>
+    </div>
+    <div>
+      <label>Тара упаковки, г</label>
+      <input id="tare" type="number" min="0" step="1" value="0">
+    </div>
+  </div>
+  <div class="row3">
+    <div>
+      <label>Дата производства</label>
+      <input id="prodDate" type="date">
+    </div>
+    <div>
+      <label>Годен до</label>
+      <input id="expDate" type="date">
+    </div>
+    <div>
+      <label>Копий</label>
+      <input id="copies" type="number" min="1" max="10" value="1">
+    </div>
+  </div>
+  <button id="printBtn">🖨 ПЕЧАТЬ ЭТИКЕТКИ</button>
+  <div id="status"></div>
+</div>
+
+<div class="panel" id="previewWrap">
+  <details open>
+    <summary>Предпросмотр этикетки</summary>
+    <img id="preview" alt="предпросмотр появится при наличии веса" style="margin-top:10px">
+  </details>
+</div>
+
+<script>
+let products = [], state = {connected:false, weight_g:0, stable:false};
+
+const $ = id => document.getElementById(id);
+const today = () => new Date().toISOString().slice(0,10);
+
+function currentProduct() {
+  return products.find(p => p.plu == $('product').value);
+}
+
+function recalcExp() {
+  const p = currentProduct(); if (!p) return;
+  const d = new Date($('prodDate').value || today());
+  d.setDate(d.getDate() + (p.shelf_days || 5));
+  $('expDate').value = d.toISOString().slice(0,10);
+}
+
+async function loadProducts() {
+  products = await (await fetch('/api/products')).json();
+  $('product').innerHTML = products.map(p =>
+    `<option value="${p.plu}">${p.plu}. ${p.name}</option>`).join('');
+  $('product').onchange = () => { $('tare').value = currentProduct()?.tare_g ?? 0; recalcExp(); schedulePreview(); };
+  $('tare').value = products[0]?.tare_g ?? 0;
+  $('prodDate').value = today();
+  recalcExp();
+}
+
+async function poll() {
+  try {
+    state = await (await fetch('/api/state')).json();
+    const w = $('weight');
+    if (!state.connected) {
+      w.className = 'offline';
+      w.textContent = 'нет связи с весами…';
+      $('scaleInfo').textContent = state.error || '';
+    } else {
+      w.className = state.stable ? 'stable' : 'moving';
+      w.textContent = state.weight_kg + ' кг';
+      $('scaleInfo').textContent = (state.port ? 'порт ' + state.port + ' · ' : '') +
+                                   (state.stable ? 'вес стабилен' : 'взвешивание…');
+    }
+    const tare = +$('tare').value || 0;
+    $('grossTxt').textContent = (state.weight_g/1000).toFixed(3) + ' кг';
+    $('tareTxt').textContent  = tare + ' г';
+    $('netTxt').textContent   = (Math.max(0, state.weight_g - tare)/1000).toFixed(3) + ' кг';
+  } catch (e) { $('weight').className = 'offline'; $('weight').textContent = 'сервер недоступен'; }
+}
+
+let prevTimer = null, lastPrevKey = '';
+function schedulePreview() { clearTimeout(prevTimer); prevTimer = setTimeout(updatePreview, 400); }
+function updatePreview() {
+  if (!state.connected || state.weight_g <= 0) return;
+  const q = new URLSearchParams({
+    plu: $('product').value, tare_g: $('tare').value || 0,
+    gross_g: state.weight_g,
+    prod_date: $('prodDate').value, exp_date: $('expDate').value,
+  });
+  const key = q.toString();
+  if (key === lastPrevKey) return;
+  lastPrevKey = key;
+  $('preview').src = '/api/preview?' + key;
+}
+
+$('printBtn').onclick = async () => {
+  const btn = $('printBtn'), st = $('status');
+  btn.disabled = true; st.className = ''; st.textContent = 'печать…';
+  try {
+    const copies = Math.max(1, +$('copies').value || 1);
+    let res;
+    for (let i = 0; i < copies; i++) {
+      res = await (await fetch('/api/print', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          plu: +$('product').value, tare_g: +$('tare').value || 0,
+          prod_date: $('prodDate').value, exp_date: $('expDate').value,
+        })})).json();
+      if (!res.ok) throw new Error(res.error);
+    }
+    st.className = 'ok';
+    st.textContent = `✓ ${res.message} · нетто ${(res.label.net_g/1000).toFixed(3)} кг · ШК ${res.label.barcode_value}`;
+  } catch (e) { st.className = 'err'; st.textContent = '✗ ' + e.message; }
+  btn.disabled = false;
+};
+
+$('prodDate').onchange = () => { recalcExp(); schedulePreview(); };
+$('expDate').onchange = $('tare').oninput = schedulePreview;
+
+loadProducts().then(() => { poll(); setInterval(poll, 300); setInterval(schedulePreview, 1500); });
+</script>
+</body>
+</html>

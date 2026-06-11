@@ -1,0 +1,49 @@
+name: Build Windows exe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/funny-volta-3ceu4g, main]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Build exe
+        run: >
+          pyinstaller --noconfirm --onefile --name tarozu
+          --add-data "web;web"
+          --hidden-import win32timezone
+          app.py
+
+      - name: Package zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory package | Out-Null
+          Copy-Item dist\tarozu.exe, config.json, products.json, README.md package\
+          Compress-Archive -Path package\* -DestinationPath tarozu-windows.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tarozu-windows
+          path: tarozu-windows.zip
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Tarozu — последняя сборка"
+          body: "Скачайте tarozu-windows.zip, распакуйте и запустите tarozu.exe двойным кликом."
+          files: tarozu-windows.zip

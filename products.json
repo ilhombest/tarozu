@@ -1,0 +1,12 @@
+[
+  {"plu": 1, "name": "Филе куриное",        "shelf_days": 5,  "tare_g": 10},
+  {"plu": 2, "name": "Голень с кожей",      "shelf_days": 5,  "tare_g": 10},
+  {"plu": 3, "name": "Крылышки",            "shelf_days": 5,  "tare_g": 10},
+  {"plu": 4, "name": "Тушка цыпленка",      "shelf_days": 7,  "tare_g": 15},
+  {"plu": 5, "name": "Бедро куриное",       "shelf_days": 5,  "tare_g": 10},
+  {"plu": 6, "name": "Грудка на кости",     "shelf_days": 5,  "tare_g": 10},
+  {"plu": 7, "name": "Фарш куриный",        "shelf_days": 3,  "tare_g": 12},
+  {"plu": 8, "name": "Печень куриная",      "shelf_days": 3,  "tare_g": 12},
+  {"plu": 9, "name": "Желудки куриные",     "shelf_days": 3,  "tare_g": 12},
+  {"plu": 10, "name": "Сердечки куриные",   "shelf_days": 3,  "tare_g": 12}
+]

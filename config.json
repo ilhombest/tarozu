@@ -1,0 +1,36 @@
+{
+  "scale": {
+    "protocol": "auto",
+    "port": "auto",
+    "baudrate": 9600,
+    "bytesize": 8,
+    "parity": "N",
+    "stopbits": 1,
+    "poll_command_hex": "",
+    "poll_interval": 0.3
+  },
+  "printer": {
+    "name": "",
+    "mode": "tspl",
+    "dpi": 203,
+    "label_width_mm": 58,
+    "label_height_mm": 40,
+    "gap_mm": 2,
+    "copies": 1
+  },
+  "barcode": {
+    "type": "ean13",
+    "prefix": "22"
+  },
+  "company": {
+    "name": "ООО \"Птицефабрика\"",
+    "address": "г. Ташкент, ул. Примерная, 1",
+    "inn": "ИНН 123456789",
+    "phone": "+998 90 000-00-00"
+  },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8077,
+    "open_browser": true
+  }
+}
