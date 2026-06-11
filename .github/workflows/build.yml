@@ -45,5 +45,10 @@ jobs:
         with:
           tag_name: latest
           name: "Tarozu — последняя сборка"
-          body: "Скачайте tarozu-windows.zip, распакуйте и запустите tarozu.exe двойным кликом."
-          files: tarozu-windows.zip
+          body: |
+            **tarozu.exe** — готовая программа: скачайте и запустите двойным кликом.
+            Файлы настроек (config.json, products.json) создадутся автоматически рядом с exe.
+            tarozu-windows.zip — то же самое + конфиги и инструкция.
+          files: |
+            dist/tarozu.exe
+            tarozu-windows.zip

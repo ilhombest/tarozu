@@ -33,10 +33,87 @@
   #previewWrap { text-align: center; }
   #preview { max-width: 100%; background: #fff; border-radius: 6px; min-height: 60px; }
   details summary { cursor: pointer; color: #8fa3b8; }
+  .topbar { width: 100%; max-width: 760px; display: flex; justify-content: space-between;
+            align-items: center; margin-bottom: 12px; }
+  .topbar h1 { margin: 0; }
+  #settingsBtn { background: #243246; color: #b9c6d4; border: 1px solid #2c3a4f;
+                 border-radius: 8px; padding: 8px 14px; font-size: 15px; cursor: pointer; }
+  #settings h2 { font-size: 16px; color: #8fa3b8; margin: 14px 0 8px; }
+  #settings h2:first-child { margin-top: 0; }
+  table.prod { width: 100%; border-collapse: collapse; }
+  table.prod th { font-size: 12px; color: #8fa3b8; text-align: left; padding: 2px 4px; }
+  table.prod td { padding: 2px 4px; }
+  table.prod input { padding: 6px; font-size: 15px; }
+  .delBtn { background: #3a2430; color: #e25555; border: none; border-radius: 6px;
+            padding: 6px 10px; cursor: pointer; font-size: 15px; }
+  .btnRow { display: flex; gap: 10px; margin-top: 14px; }
+  .btnRow button { flex: 1; padding: 12px; font-size: 17px; font-weight: 600;
+                   border: none; border-radius: 8px; cursor: pointer; }
+  #saveBtn { background: #2f8f4e; color: #fff; }
+  #addProdBtn { background: #243246; color: #b9c6d4; }
+  #setupStatus { margin-top: 8px; text-align: center; min-height: 20px; font-size: 14px; }
+  #setupStatus.ok { color: #5ad87a; } #setupStatus.err { color: #e25555; }
 </style>
 </head>
 <body>
-<h1>TAROZU — весовой терминал</h1>
+<div class="topbar">
+  <h1>TAROZU — весовой терминал</h1>
+  <button id="settingsBtn">⚙ Настройки</button>
+</div>
+
+<div class="panel" id="settings" style="display:none">
+  <h2>Весы</h2>
+  <div class="row3">
+    <div><label>Протокол</label>
+      <select id="cfgProto">
+        <option value="auto">auto — определить самому</option>
+        <option value="cas">CAS</option>
+        <option value="generic">generic — любой поток</option>
+        <option value="demo">demo — без весов</option>
+      </select></div>
+    <div><label>COM-порт</label><select id="cfgPort"></select></div>
+    <div><label>Скорость (бод)</label>
+      <select id="cfgBaud">
+        <option>1200</option><option>2400</option><option>4800</option>
+        <option selected>9600</option><option>19200</option><option>38400</option>
+        <option>57600</option><option>115200</option>
+      </select></div>
+  </div>
+  <h2>Принтер</h2>
+  <div class="row3">
+    <div><label>Принтер</label><select id="cfgPrinter"></select></div>
+    <div><label>Режим печати</label>
+      <select id="cfgMode">
+        <option value="tspl">TSPL (Xprinter и кит. принтеры)</option>
+        <option value="zpl">ZPL (Zebra)</option>
+        <option value="windows">Драйвер Windows</option>
+        <option value="file">В файл (отладка)</option>
+      </select></div>
+    <div><label>Этикетка, мм (Ш×В)</label>
+      <div style="display:flex;gap:6px">
+        <input id="cfgLw" type="number" min="20" max="120" value="58">
+        <input id="cfgLh" type="number" min="20" max="120" value="40">
+      </div></div>
+  </div>
+  <h2>Производитель (печатается на этикетке)</h2>
+  <div class="grid">
+    <div><label>Название</label><input id="cfgCName"></div>
+    <div><label>Адрес</label><input id="cfgCAddr"></div>
+    <div><label>ИНН</label><input id="cfgCInn"></div>
+    <div><label>Телефон</label><input id="cfgCPhone"></div>
+  </div>
+  <h2>Товары</h2>
+  <table class="prod">
+    <thead><tr><th style="width:60px">PLU</th><th>Название</th>
+      <th style="width:90px">Срок, дн</th><th style="width:90px">Тара, г</th><th></th></tr></thead>
+    <tbody id="prodRows"></tbody>
+  </table>
+  <div class="btnRow">
+    <button id="addProdBtn">+ Добавить товар</button>
+    <button id="saveBtn">💾 Сохранить настройки</button>
+  </div>
+  <div id="setupStatus"></div>
+</div>
 
 <div class="panel">
   <div id="weight" class="offline">нет связи с весами…</div>
@@ -170,6 +247,80 @@ $('printBtn').onclick = async () => {
 
 $('prodDate').onchange = () => { recalcExp(); schedulePreview(); };
 $('expDate').onchange = $('tare').oninput = schedulePreview;
+
+// ----- настройки -----
+let cfg = null;
+
+function prodRow(p = {}) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="number" min="1" class="pPlu" value="${p.plu ?? ''}"></td>
+    <td><input class="pName" value="${(p.name ?? '').replace(/"/g,'&quot;')}"></td>
+    <td><input type="number" min="1" class="pShelf" value="${p.shelf_days ?? 5}"></td>
+    <td><input type="number" min="0" class="pTare" value="${p.tare_g ?? 0}"></td>
+    <td><button class="delBtn" title="удалить">✕</button></td>`;
+  tr.querySelector('.delBtn').onclick = () => tr.remove();
+  return tr;
+}
+
+async function openSettings() {
+  const setup = await (await fetch('/api/setup')).json();
+  cfg = setup.config;
+  const sc = cfg.scale, pr = cfg.printer, co = cfg.company;
+  $('cfgProto').value = sc.protocol;
+  $('cfgBaud').value = sc.baudrate;
+  $('cfgPort').innerHTML = '<option value="auto">auto — найти автоматически</option>' +
+    setup.ports.map(p => `<option value="${p.port}">${p.port} — ${p.desc}</option>`).join('');
+  $('cfgPort').value = setup.ports.some(p => p.port === sc.port) ? sc.port : 'auto';
+  $('cfgPrinter').innerHTML = '<option value="">(принтер по умолчанию)</option>' +
+    setup.printers.map(n => `<option value="${n}">${n}</option>`).join('');
+  $('cfgPrinter').value = setup.printers.includes(pr.name) ? pr.name : '';
+  $('cfgMode').value = pr.mode;
+  $('cfgLw').value = pr.label_width_mm; $('cfgLh').value = pr.label_height_mm;
+  $('cfgCName').value = co.name; $('cfgCAddr').value = co.address;
+  $('cfgCInn').value = co.inn; $('cfgCPhone').value = co.phone;
+  const tb = $('prodRows'); tb.innerHTML = '';
+  products.forEach(p => tb.appendChild(prodRow(p)));
+  $('settings').style.display = '';
+}
+
+$('settingsBtn').onclick = () => {
+  if ($('settings').style.display === 'none') openSettings();
+  else $('settings').style.display = 'none';
+};
+
+$('addProdBtn').onclick = () => $('prodRows').appendChild(prodRow({plu: '', shelf_days: 5, tare_g: 10}));
+
+$('saveBtn').onclick = async () => {
+  const st = $('setupStatus'); st.className = ''; st.textContent = 'сохранение…';
+  try {
+    cfg.scale.protocol = $('cfgProto').value;
+    cfg.scale.port = $('cfgPort').value;
+    cfg.scale.baudrate = +$('cfgBaud').value;
+    cfg.printer.name = $('cfgPrinter').value;
+    cfg.printer.mode = $('cfgMode').value;
+    cfg.printer.label_width_mm = +$('cfgLw').value || 58;
+    cfg.printer.label_height_mm = +$('cfgLh').value || 40;
+    cfg.company = { name: $('cfgCName').value, address: $('cfgCAddr').value,
+                    inn: $('cfgCInn').value, phone: $('cfgCPhone').value };
+    const prods = [...$('prodRows').children].map(tr => ({
+      plu: +tr.querySelector('.pPlu').value || 0,
+      name: tr.querySelector('.pName').value.trim(),
+      shelf_days: +tr.querySelector('.pShelf').value || 5,
+      tare_g: +tr.querySelector('.pTare').value || 0,
+    })).filter(p => p.name);
+    if (!prods.length) throw new Error('добавьте хотя бы один товар');
+    let r = await (await fetch('/api/config', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify(cfg)})).json();
+    if (!r.ok) throw new Error(r.error);
+    r = await (await fetch('/api/products', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify(prods)})).json();
+    if (!r.ok) throw new Error(r.error);
+    await loadProducts();
+    lastPrevKey = ''; schedulePreview();
+    st.className = 'ok'; st.textContent = '✓ Сохранено и применено';
+  } catch (e) { st.className = 'err'; st.textContent = '✗ ' + e.message; }
+};
 
 loadProducts().then(() => { poll(); setInterval(poll, 300); setInterval(schedulePreview, 1500); });
 </script>
