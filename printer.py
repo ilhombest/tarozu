@@ -19,6 +19,11 @@ try:
 except ImportError:
     win32print = None
 
+try:
+    import serial
+except ImportError:
+    serial = None
+
 from PIL import Image
 
 
@@ -36,6 +41,17 @@ def _printer_name(cfg):
     if win32print is None:
         raise RuntimeError("pywin32 недоступен")
     return win32print.GetDefaultPrinter()
+
+
+def _serial_print(cfg, payload: bytes):
+    """Прямая печать на принтер, подключённый через COM-порт (минуя Windows)."""
+    if serial is None:
+        raise RuntimeError("pyserial не установлен")
+    p = cfg["printer"]
+    with serial.Serial(port=p["port"], baudrate=int(p.get("baudrate", 9600)),
+                       timeout=3, write_timeout=10) as ser:
+        ser.write(payload)
+        ser.flush()
 
 
 def _raw_print(printer_name: str, payload: bytes, doc="tarozu label"):
@@ -98,6 +114,7 @@ def _escpos(img: Image.Image, cfg) -> bytes:
         + bytes((wb % 256, wb // 256, h % 256, h // 256))
         + raster
         + b"\x1bd\x04"                             # прогон до отрыва этикетки
+        + (b"\x1bi" if p.get("cut", True) else b"")  # ESC i - отрез (если есть резак)
     )
     return one * max(1, int(p.get("copies", 1)))
 
@@ -115,7 +132,12 @@ def _windows_gdi(img, printer_name):
 
 
 def print_label(img: Image.Image, cfg) -> str:
-    mode = cfg["printer"].get("mode", "tspl")
+    mode = cfg["printer"].get("mode", "escpos")
+    com_port = (cfg["printer"].get("port") or "").strip()
+    if com_port and mode in ("escpos", "tspl", "zpl"):
+        payload = {"escpos": _escpos, "tspl": _tspl, "zpl": _zpl}[mode](img, cfg)
+        _serial_print(cfg, payload)
+        return f"отправлено на принтер ({com_port})"
     if mode == "file" or win32print is None:
         out = os.path.join(os.path.dirname(os.path.abspath(
             sys.executable if getattr(sys, "frozen", False) else __file__)), "label.png")

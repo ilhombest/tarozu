@@ -93,7 +93,8 @@ class ScaleReader(threading.Thread):
         port = self.cfg.get("port", "auto")
         if port and port.lower() != "auto":
             return port
-        ports = list_ports()
+        exclude = (self.cfg.get("exclude_port") or "").strip().lower()
+        ports = [p for p in list_ports() if p["port"].lower() != exclude]
         if not ports:
             raise RuntimeError("COM-порты не найдены")
         # предпочитаем USB-Serial адаптеры (CH340/CP210x/FTDI - типично для китайских весов)

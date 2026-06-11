@@ -25,6 +25,9 @@ DEFAULT_CONFIG = {
     },
     "printer": {
         "name": "",
+        "port": "",
+        "baudrate": 9600,
+        "cut": True,
         "mode": "escpos",
         "escpos_width_dots": 384,
         "dpi": 203,
@@ -101,19 +104,26 @@ class App:
     def __init__(self):
         self.cfg = _merge_defaults(load_json("config.json", DEFAULT_CONFIG), DEFAULT_CONFIG)
         self.products = load_json("products.json", DEFAULT_PRODUCTS)
-        self.reader = scale.ScaleReader(self.cfg.get("scale", {}))
+        self.reader = scale.ScaleReader(self._scale_cfg(self.cfg))
         self.reader.start()
         self.print_lock = threading.Lock()
+
+    @staticmethod
+    def _scale_cfg(cfg):
+        # порт принтера исключаем из автопоиска весов, чтобы их не перепутать
+        sc = dict(cfg.get("scale", {}))
+        sc["exclude_port"] = cfg.get("printer", {}).get("port", "")
+        return sc
 
     def save_config(self, new_cfg):
         """Сохраняет настройки; при смене параметров весов перезапускает чтение."""
         new_cfg = _merge_defaults(new_cfg, DEFAULT_CONFIG)
-        scale_changed = new_cfg.get("scale") != self.cfg.get("scale")
+        scale_changed = self._scale_cfg(new_cfg) != self._scale_cfg(self.cfg)
         self.cfg = new_cfg
         save_json("config.json", new_cfg)
         if scale_changed:
             self.reader.stop()
-            self.reader = scale.ScaleReader(new_cfg["scale"])
+            self.reader = scale.ScaleReader(self._scale_cfg(new_cfg))
             self.reader.start()
 
     def save_products(self, products):

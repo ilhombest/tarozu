@@ -11,6 +11,9 @@
   },
   "printer": {
     "name": "",
+    "port": "COM5",
+    "baudrate": 9600,
+    "cut": true,
     "mode": "escpos",
     "escpos_width_dots": 384,
     "dpi": 203,

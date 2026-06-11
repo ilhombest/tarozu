@@ -96,6 +96,16 @@
         <input id="cfgLh" type="number" min="20" max="120" value="40">
       </div></div>
   </div>
+  <div class="row3">
+    <div><label>Подключение принтера</label><select id="cfgPPort"></select></div>
+    <div><label>Скорость порта принтера</label>
+      <select id="cfgPBaud">
+        <option>9600</option><option>19200</option><option>38400</option>
+        <option>57600</option><option>115200</option>
+      </select></div>
+    <div><label>Копий этикетки</label>
+      <input id="cfgCopies" type="number" min="1" max="10" value="1"></div>
+  </div>
   <h2>Производитель (печатается на этикетке)</h2>
   <div class="grid">
     <div><label>Название</label><input id="cfgCName"></div>
@@ -277,6 +287,11 @@ async function openSettings() {
     setup.printers.map(n => `<option value="${n}">${n}</option>`).join('');
   $('cfgPrinter').value = setup.printers.includes(pr.name) ? pr.name : '';
   $('cfgMode').value = pr.mode;
+  $('cfgPPort').innerHTML = '<option value="">через драйвер Windows</option>' +
+    setup.ports.map(p => `<option value="${p.port}">напрямую: ${p.port} — ${p.desc}</option>`).join('');
+  $('cfgPPort').value = setup.ports.some(p => p.port === pr.port) ? pr.port : '';
+  $('cfgPBaud').value = pr.baudrate || 9600;
+  $('cfgCopies').value = pr.copies || 1;
   $('cfgLw').value = pr.label_width_mm; $('cfgLh').value = pr.label_height_mm;
   $('cfgCName').value = co.name; $('cfgCAddr').value = co.address;
   $('cfgCInn').value = co.inn; $('cfgCPhone').value = co.phone;
@@ -300,6 +315,9 @@ $('saveBtn').onclick = async () => {
     cfg.scale.baudrate = +$('cfgBaud').value;
     cfg.printer.name = $('cfgPrinter').value;
     cfg.printer.mode = $('cfgMode').value;
+    cfg.printer.port = $('cfgPPort').value;
+    cfg.printer.baudrate = +$('cfgPBaud').value || 9600;
+    cfg.printer.copies = Math.max(1, +$('cfgCopies').value || 1);
     cfg.printer.label_width_mm = +$('cfgLw').value || 58;
     cfg.printer.label_height_mm = +$('cfgLh').value || 40;
     cfg.company = { name: $('cfgCName').value, address: $('cfgCAddr').value,
