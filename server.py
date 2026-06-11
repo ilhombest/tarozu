@@ -28,6 +28,7 @@ DEFAULT_CONFIG = {
         "port": "",
         "baudrate": 9600,
         "cut": True,
+        "gap_feed": True,
         "mode": "escpos",
         "escpos_width_dots": 384,
         "dpi": 203,

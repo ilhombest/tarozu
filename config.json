@@ -14,6 +14,7 @@
     "port": "COM5",
     "baudrate": 9600,
     "cut": true,
+    "gap_feed": true,
     "mode": "escpos",
     "escpos_width_dots": 384,
     "dpi": 203,

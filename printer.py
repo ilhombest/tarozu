@@ -113,7 +113,9 @@ def _escpos(img: Image.Image, cfg) -> bytes:
         + b"\x1dv0\x00"                            # GS v 0: растровое изображение
         + bytes((wb % 256, wb // 256, h % 256, h // 256))
         + raster
-        + b"\x1bd\x04"                             # прогон до отрыва этикетки
+        # FF - протяжка до начала следующей этикетки (по датчику зазора);
+        # если принтер не на этикеточной ленте - обычный прогон строк
+        + (b"\x0c" if p.get("gap_feed", True) else b"\x1bd\x04")
         + (b"\x1bi" if p.get("cut", True) else b"")  # ESC i - отрез (если есть резак)
     )
     return one * max(1, int(p.get("copies", 1)))
