@@ -42,6 +42,8 @@ class ScaleReader(threading.Thread):
         self.connected = False
         self.error = ""
         self.port_in_use = ""
+        self.last_raw = ""
+        self._zero_streak = 0
         self._stop = threading.Event()
 
     def snapshot(self):
@@ -52,6 +54,7 @@ class ScaleReader(threading.Thread):
                 "connected": self.connected,
                 "error": self.error,
                 "port": self.port_in_use,
+                "raw": self.last_raw,
             }
 
     def stop(self):
@@ -129,9 +132,10 @@ class ScaleReader(threading.Thread):
                     *lines, buf = re.split(rb"[\r\n]+", buf)
                     for line in lines:
                         self._parse_line(line)
-                    if len(buf) > 256:  # поток без перевода строки
-                        self._parse_line(buf)
-                        buf = b""
+                    if len(buf) > 64:  # поток без перевода строки
+                        # хвост оставляем: там может быть начало неполного кадра
+                        self._parse_line(buf[:-12])
+                        buf = buf[-12:]
                 elif time.time() - last_data > 5:
                     raise RuntimeError(f"{port}: весы не отвечают")
 
@@ -162,7 +166,16 @@ class ScaleReader(threading.Thread):
             return
         grams, stable = parsed
         with self.lock:
-            self.weight_g = int(round(grams))
-            self.stable = stable
+            self.last_raw = line[:80]
             self.connected = True
             self.error = ""
+            # многие весы перемежают кадры веса кадрами тары/нуля:
+            # одиночные нули игнорируем, ноль принимаем только после серии
+            if abs(grams) < 1 and self.weight_g != 0:
+                self._zero_streak += 1
+                if self._zero_streak < 4:
+                    return
+            else:
+                self._zero_streak = 0
+            self.weight_g = int(round(grams))
+            self.stable = stable

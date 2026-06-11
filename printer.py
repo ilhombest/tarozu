@@ -1,6 +1,8 @@
 """Печать этикетки.
 
 Режимы (config.json -> printer.mode):
+  escpos  - растровая печать ESC/POS (чековые принтеры и встроенные
+            термопринтеры китайских POS-моноблоков)
   tspl    - картинка отправляется RAW-командой BITMAP (TSPL/TSPL2: Xprinter,
             Gprinter, HPRT, Atol и почти все китайские термопринтеры)
   zpl     - то же для Zebra-совместимых (команда ^GFA)
@@ -83,6 +85,23 @@ def _zpl(img, cfg) -> bytes:
     ).encode("ascii")
 
 
+def _escpos(img: Image.Image, cfg) -> bytes:
+    p = cfg["printer"]
+    width = int(p.get("escpos_width_dots", 384))  # 384 точки = 58-мм чековый
+    if img.width > width:
+        img = img.resize((width, max(1, round(img.height * width / img.width))), Image.LANCZOS)
+    wb, h, data = _img_rows(img)
+    raster = bytes(b ^ 0xFF for b in data)  # в ESC/POS бит 1 - чёрный
+    one = (
+        b"\x1b@"                                   # сброс
+        + b"\x1dv0\x00"                            # GS v 0: растровое изображение
+        + bytes((wb % 256, wb // 256, h % 256, h // 256))
+        + raster
+        + b"\x1bd\x04"                             # прогон до отрыва этикетки
+    )
+    return one * max(1, int(p.get("copies", 1)))
+
+
 def _windows_gdi(img, printer_name):
     hdc = win32ui.CreateDC()
     hdc.CreatePrinterDC(printer_name)
@@ -103,7 +122,9 @@ def print_label(img: Image.Image, cfg) -> str:
         img.save(out)
         return f"принтер недоступен, этикетка сохранена: {out}" if mode != "file" else f"сохранено: {out}"
     name = _printer_name(cfg)
-    if mode == "tspl":
+    if mode == "escpos":
+        _raw_print(name, _escpos(img, cfg))
+    elif mode == "tspl":
         _raw_print(name, _tspl(img, cfg))
     elif mode == "zpl":
         _raw_print(name, _zpl(img, cfg))

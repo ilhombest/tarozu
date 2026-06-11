@@ -25,7 +25,8 @@ DEFAULT_CONFIG = {
     },
     "printer": {
         "name": "",
-        "mode": "tspl",
+        "mode": "escpos",
+        "escpos_width_dots": 384,
         "dpi": 203,
         "label_width_mm": 58,
         "label_height_mm": 40,
