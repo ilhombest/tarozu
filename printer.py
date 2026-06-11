@@ -113,8 +113,9 @@ def _escpos(img: Image.Image, cfg) -> bytes:
         tail = b"\x0c"
     else:
         # без датчика: докручиваем ленту так, чтобы печать занимала ровно
-        # один шаг этикетки (высота + зазор) - тогда позиция не уползает
-        pitch = int(round((p["label_height_mm"] + p.get("gap_mm", 2)) * 8))
+        # один шаг этикетки (размер вдоль ленты + зазор) - позиция не уползает
+        along = p["label_width_mm"] if int(p.get("rotate", 0)) % 180 == 90 else p["label_height_mm"]
+        pitch = int(round((along + p.get("gap_mm", 2)) * 8))
         rest = max(0, pitch - h)
         tail = b""
         while rest > 0:
