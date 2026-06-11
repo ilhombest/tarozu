@@ -108,14 +108,25 @@ def _escpos(img: Image.Image, cfg) -> bytes:
         img = img.resize((width, max(1, round(img.height * width / img.width))), Image.LANCZOS)
     wb, h, data = _img_rows(img)
     raster = bytes(b ^ 0xFF for b in data)  # в ESC/POS бит 1 - чёрный
+    if p.get("gap_feed", False):
+        # FF: протяжка до следующей этикетки по датчику зазора (если поддерживается)
+        tail = b"\x0c"
+    else:
+        # без датчика: докручиваем ленту так, чтобы печать занимала ровно
+        # один шаг этикетки (высота + зазор) - тогда позиция не уползает
+        pitch = int(round((p["label_height_mm"] + p.get("gap_mm", 2)) * 8))
+        rest = max(0, pitch - h)
+        tail = b""
+        while rest > 0:
+            n = min(255, rest)
+            tail += b"\x1bJ" + bytes((n,))  # ESC J n - прогон на n точек
+            rest -= n
     one = (
         b"\x1b@"                                   # сброс
         + b"\x1dv0\x00"                            # GS v 0: растровое изображение
         + bytes((wb % 256, wb // 256, h % 256, h // 256))
         + raster
-        # FF - протяжка до начала следующей этикетки (по датчику зазора);
-        # если принтер не на этикеточной ленте - обычный прогон строк
-        + (b"\x0c" if p.get("gap_feed", True) else b"\x1bd\x04")
+        + tail
         + (b"\x1bi" if p.get("cut", True) else b"")  # ESC i - отрез (если есть резак)
     )
     return one * max(1, int(p.get("copies", 1)))

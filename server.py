@@ -28,7 +28,7 @@ DEFAULT_CONFIG = {
         "port": "",
         "baudrate": 9600,
         "cut": True,
-        "gap_feed": True,
+        "gap_feed": False,
         "mode": "escpos",
         "escpos_width_dots": 384,
         "dpi": 203,
@@ -126,6 +126,20 @@ class App:
             self.reader.stop()
             self.reader = scale.ScaleReader(self._scale_cfg(new_cfg))
             self.reader.start()
+
+    def do_testprint(self):
+        """Печатает рамку по размеру этикетки - для калибровки положения."""
+        from PIL import Image, ImageDraw
+        p = self.cfg["printer"]
+        w, h = int(p["label_width_mm"] * 8), int(p["label_height_mm"] * 8)
+        img = Image.new("1", (w, h), 1)
+        d = ImageDraw.Draw(img)
+        d.rectangle([0, 0, w - 1, h - 1], outline=0, width=4)
+        d.line([0, 0, w - 1, h - 1], fill=0, width=2)
+        d.line([w - 1, 0, 0, h - 1], fill=0, width=2)
+        with self.print_lock:
+            msg = printer.print_label(img, self.cfg)
+        return {"ok": True, "message": msg}
 
     def save_products(self, products):
         cleaned = []
@@ -244,6 +258,8 @@ def make_handler(app: App):
                 elif self.path == "/api/products":
                     app.save_products(self._read_body())
                     self._json({"ok": True})
+                elif self.path == "/api/testprint":
+                    self._json(app.do_testprint())
                 else:
                     self.send_error(404)
             except Exception as e:

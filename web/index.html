@@ -121,6 +121,7 @@
   </table>
   <div class="btnRow">
     <button id="addProdBtn">+ Добавить товар</button>
+    <button id="testBtn" style="background:#243246;color:#b9c6d4">🖨 Тест печати</button>
     <button id="saveBtn">💾 Сохранить настройки</button>
   </div>
   <div id="setupStatus"></div>
@@ -306,6 +307,15 @@ $('settingsBtn').onclick = () => {
 };
 
 $('addProdBtn').onclick = () => $('prodRows').appendChild(prodRow({plu: '', shelf_days: 5, tare_g: 10}));
+
+$('testBtn').onclick = async () => {
+  const st = $('setupStatus'); st.className = ''; st.textContent = 'печать теста…';
+  try {
+    const r = await (await fetch('/api/testprint', {method: 'POST'})).json();
+    if (!r.ok) throw new Error(r.error);
+    st.className = 'ok'; st.textContent = '✓ ' + r.message + ' — рамка должна совпасть с краями этикетки';
+  } catch (e) { st.className = 'err'; st.textContent = '✗ ' + e.message; }
+};
 
 $('saveBtn').onclick = async () => {
   const st = $('setupStatus'); st.className = ''; st.textContent = 'сохранение…';
