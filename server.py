@@ -30,6 +30,8 @@ DEFAULT_CONFIG = {
         "cut": True,
         "gap_feed": False,
         "rotate": 0,
+        "offset_x_mm": 0,
+        "offset_y_mm": 0,
         "mode": "escpos",
         "escpos_width_dots": 384,
         "dpi": 203,

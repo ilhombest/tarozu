@@ -154,6 +154,13 @@ def print_label(img: Image.Image, cfg) -> str:
     rot = int(cfg["printer"].get("rotate", 0)) % 360
     if rot:
         img = img.rotate(-rot, expand=True, fillcolor=1)
+    # калибровочный сдвиг: положительный - вправо/вниз, отрицательный - влево/вверх
+    ox = int(round(float(cfg["printer"].get("offset_x_mm", 0)) * 8))
+    oy = int(round(float(cfg["printer"].get("offset_y_mm", 0)) * 8))
+    if ox or oy:
+        canvas = Image.new("1", (img.width + max(0, ox), img.height + max(0, oy)), 1)
+        canvas.paste(img.convert("1"), (ox, oy))
+        img = canvas
     com_port = (cfg["printer"].get("port") or "").strip()
     if com_port and mode in ("escpos", "tspl", "zpl"):
         payload = {"escpos": _escpos, "tspl": _tspl, "zpl": _zpl}[mode](img, cfg)

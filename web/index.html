@@ -114,6 +114,10 @@
         <option value="180">180°</option>
         <option value="270">270°</option>
       </select></div>
+    <div><label>Сдвиг вправо, мм (− влево)</label>
+      <input id="cfgOffX" type="number" step="0.5" value="0"></div>
+    <div><label>Сдвиг вниз, мм (− вверх)</label>
+      <input id="cfgOffY" type="number" step="0.5" value="0"></div>
   </div>
   <h2>Производитель (печатается на этикетке)</h2>
   <div class="grid">
@@ -303,6 +307,8 @@ async function openSettings() {
   $('cfgPBaud').value = pr.baudrate || 9600;
   $('cfgCopies').value = pr.copies || 1;
   $('cfgRotate').value = String(pr.rotate || 0);
+  $('cfgOffX').value = pr.offset_x_mm || 0;
+  $('cfgOffY').value = pr.offset_y_mm || 0;
   $('cfgLw').value = pr.label_width_mm; $('cfgLh').value = pr.label_height_mm;
   $('cfgCName').value = co.name; $('cfgCAddr').value = co.address;
   $('cfgCInn').value = co.inn; $('cfgCPhone').value = co.phone;
@@ -339,6 +345,8 @@ $('saveBtn').onclick = async () => {
     cfg.printer.baudrate = +$('cfgPBaud').value || 9600;
     cfg.printer.copies = Math.max(1, +$('cfgCopies').value || 1);
     cfg.printer.rotate = +$('cfgRotate').value || 0;
+    cfg.printer.offset_x_mm = +$('cfgOffX').value || 0;
+    cfg.printer.offset_y_mm = +$('cfgOffY').value || 0;
     cfg.printer.label_width_mm = +$('cfgLw').value || 58;
     cfg.printer.label_height_mm = +$('cfgLh').value || 40;
     cfg.company = { name: $('cfgCName').value, address: $('cfgCAddr').value,
