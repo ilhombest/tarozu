@@ -35,6 +35,7 @@ DEFAULT_CONFIG = {
         "offset_y_mm": 0,
         "font_scale": 100,
         "page_fit": True,
+        "pause_after_print_s": 0.5,
         "mode": "escpos",
         "escpos_width_dots": 384,
         "dpi": 203,
@@ -200,7 +201,20 @@ class App:
         data = self.build_label_data(req)
         img = label.render_label(self.cfg, data)
         with self.print_lock:
-            msg = printer.print_label(img, self.cfg)
+            # драйвер изредка занят предыдущим заданием - повторяем с паузой
+            last_err = None
+            for attempt in range(3):
+                if attempt:
+                    time.sleep(1.5)
+                try:
+                    msg = printer.print_label(img, self.cfg)
+                    break
+                except Exception as e:
+                    last_err = e
+            else:
+                raise RuntimeError(f"принтер не ответил после 3 попыток: {last_err}")
+            # короткая пауза, чтобы быстрые повторные печати не душили драйвер
+            time.sleep(float(self.cfg["printer"].get("pause_after_print_s", 0.5)))
         return {"ok": True, "message": msg, "label": data}
 
 
