@@ -26,6 +26,7 @@
   table.prod th { font-size: 12px; color: #8fa3b8; text-align: left; padding: 2px 4px; }
   table.prod td { padding: 2px 4px; }
   table.prod input { padding: 6px; font-size: 15px; }
+  table.prod input[type="number"] { padding: 6px 2px 6px 6px; min-width: 70px; }
   .delBtn { background: #3a2430; color: #e25555; border: none; border-radius: 6px;
             padding: 6px 10px; cursor: pointer; font-size: 15px; }
   .btnRow { display: flex; gap: 10px; margin-top: 14px; }
@@ -140,8 +141,8 @@
   <h2>Дизайн этикетки</h2>
   <table class="prod">
     <thead><tr><th style="width:92px">Элемент</th><th>Текст</th>
-      <th style="width:52px">X, мм</th><th style="width:52px">Y, мм</th>
-      <th style="width:56px">Шир, мм</th><th style="width:52px">Размер</th>
+      <th style="width:78px">X, мм</th><th style="width:78px">Y, мм</th>
+      <th style="width:82px">Шир, мм</th><th style="width:78px">Размер</th>
       <th style="width:30px" title="Полужирный">Ж</th><th style="width:30px" title="Курсив">К</th>
       <th style="width:86px">Выравн.</th><th></th></tr></thead>
     <tbody id="tplRows"></tbody>
