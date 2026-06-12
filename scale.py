@@ -170,11 +170,15 @@ class ScaleReader(threading.Thread):
             self.last_raw = line[:80]
             self.connected = True
             self.error = ""
-            # многие весы перемежают кадры веса кадрами тары/нуля:
-            # одиночные нули игнорируем, ноль принимаем только после серии
-            if abs(grams) < 1 and self.weight_g != 0:
+            # дрожание пустых весов и кадры тары (0...2 г) считаем чистым нулём
+            if abs(grams) <= 2:
+                grams = 0.0
+            # многие весы перемежают кадры веса кадрами тары/нуля: одиночные
+            # нули игнорируем, ноль принимаем только после длинной серии
+            # подряд (товар действительно сняли с весов)
+            if grams == 0 and self.weight_g != 0:
                 self._zero_streak += 1
-                if self._zero_streak < 4:
+                if self._zero_streak < 8:
                     return
             else:
                 self._zero_streak = 0

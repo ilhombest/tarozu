@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import threading
+import time
 from datetime import date, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -171,6 +172,13 @@ class App:
             raise ValueError(f"товар PLU {plu} не найден")
         st = self.reader.snapshot()
         gross = int(req.get("gross_g") or st["weight_g"])
+        if gross <= 0 and not req.get("gross_g"):
+            # вес мог "провалиться" на долю секунды - ждём, пока вернётся
+            for _ in range(15):
+                time.sleep(0.1)
+                gross = self.reader.snapshot()["weight_g"]
+                if gross > 0:
+                    break
         if gross <= 0:
             raise ValueError("нет веса на весах")
         tare = int(req.get("tare_g", prod.get("tare_g", 0)))
