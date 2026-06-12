@@ -45,7 +45,7 @@ class ScaleReader(threading.Thread):
         self.port_in_use = ""
         self.last_raw = ""
         self.raw_hist = deque(maxlen=8)
-        self._zero_streak = 0
+        self._zero_since = 0.0
         self._last_gross_t = 0.0
         self._stop = threading.Event()
 
@@ -119,7 +119,7 @@ class ScaleReader(threading.Thread):
             bytesize=self.cfg.get("bytesize", 8),
             parity=self.cfg.get("parity", "N"),
             stopbits=self.cfg.get("stopbits", 1),
-            timeout=0.5,
+            timeout=0.2,
         ) as ser:
             with self.lock:
                 self.port_in_use = port
@@ -130,7 +130,10 @@ class ScaleReader(threading.Thread):
                 if poll and time.time() - last_poll >= self.cfg.get("poll_interval", 0.3):
                     ser.write(poll)
                     last_poll = time.time()
-                chunk = ser.read(64)
+                # читаем без накопления: первый байт сразу, затем добираем буфер
+                chunk = ser.read(1)
+                if chunk and ser.in_waiting:
+                    chunk += ser.read(ser.in_waiting)
                 if chunk:
                     last_data = time.time()
                     buf += chunk
@@ -189,14 +192,14 @@ class ScaleReader(threading.Thread):
             # дрожание пустых весов и кадры тары (0...2 г) считаем чистым нулём
             if abs(grams) <= 2:
                 grams = 0.0
-            # многие весы перемежают кадры веса кадрами тары/нуля: одиночные
-            # нули игнорируем, ноль принимаем только после длинной серии
-            # подряд (товар действительно сняли с весов)
+            # ноль принимаем, только если нули идут непрерывно 0.6 секунды
+            # (товар действительно сняли), одиночные провалы игнорируем
             if grams == 0 and self.weight_g != 0:
-                self._zero_streak += 1
-                if self._zero_streak < 8:
+                if not self._zero_since:
+                    self._zero_since = now
+                if now - self._zero_since < 0.6:
                     return
             else:
-                self._zero_streak = 0
+                self._zero_since = 0.0
             self.weight_g = int(round(grams))
             self.stable = stable

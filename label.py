@@ -20,36 +20,38 @@ from PIL import Image, ImageDraw, ImageFont
 
 from barcode import ean13_modules, code128_modules
 
-_FONT_CANDIDATES = [
-    r"C:\Windows\Fonts\arialbd.ttf",
-    r"C:\Windows\Fonts\arial.ttf",
-    r"C:\Windows\Fonts\tahomabd.ttf",
-    r"C:\Windows\Fonts\tahoma.ttf",
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-]
+_FONT_FILES = {
+    # (полужирный, курсив) -> кандидаты по порядку
+    (False, False): ["arial.ttf", "tahoma.ttf", "DejaVuSans.ttf"],
+    (True, False): ["arialbd.ttf", "tahomabd.ttf", "DejaVuSans-Bold.ttf"],
+    (False, True): ["ariali.ttf", "DejaVuSans-Oblique.ttf"],
+    (True, True): ["arialbi.ttf", "DejaVuSans-BoldOblique.ttf"],
+}
+_FONT_DIRS = [r"C:\Windows\Fonts", "/usr/share/fonts/truetype/dejavu"]
 
 
-def _font(size: int, bold=True):
-    cands = _FONT_CANDIDATES if bold else _FONT_CANDIDATES[1:] + _FONT_CANDIDATES[:1]
-    for path in cands:
-        if os.path.exists(path):
-            try:
-                return ImageFont.truetype(path, size)
-            except Exception:
-                pass
+def _font(size: int, bold=True, italic=False):
+    names = _FONT_FILES[(bool(bold), bool(italic))] + _FONT_FILES[(True, False)] + _FONT_FILES[(False, False)]
+    for name in names:
+        for d in _FONT_DIRS:
+            path = os.path.join(d, name)
+            if os.path.exists(path):
+                try:
+                    return ImageFont.truetype(path, size)
+                except Exception:
+                    pass
     return ImageFont.load_default()
 
 
-def _fit_text(draw, text, max_w, start_size, min_size=14, bold=True):
+def _fit_text(draw, text, max_w, start_size, min_size=14, bold=True, italic=False):
     """Подбор размера шрифта, чтобы текст влез по ширине."""
     size = start_size
     while size > min_size:
-        f = _font(size, bold)
+        f = _font(size, bold, italic)
         if draw.textlength(text, font=f) <= max_w:
             return f
         size -= 2
-    return _font(min_size, bold)
+    return _font(min_size, bold, italic)
 
 
 def make_barcode_value(cfg, plu: int, net_g: int):
@@ -79,8 +81,76 @@ def _draw_barcode(img, draw, value, btype, x0, x1, y0, y1, font):
     draw.text(((x0 + x1 - tw) // 2, y0 + bar_h + 2), value, font=font, fill=0)
 
 
+class _SafeDict(dict):
+    def __missing__(self, key):
+        return "{" + key + "}"
+
+
+def _tpl_values(cfg, data):
+    comp = cfg.get("company", {})
+    return _SafeDict(
+        name=data["name"],
+        net_kg=f"{data['net_g'] / 1000:.3f}",
+        gross_kg=f"{data['gross_g'] / 1000:.3f}",
+        net_g=str(data["net_g"]),
+        gross_g=str(data["gross_g"]),
+        prod_date=data["prod_date"],
+        exp_date=data["exp_date"],
+        barcode=data["barcode_value"],
+        company_name=comp.get("name", ""),
+        company_address=comp.get("address", ""),
+        company_inn=comp.get("inn", ""),
+        company_phone=comp.get("phone", ""),
+    )
+
+
+def render_template(cfg, data) -> Image.Image:
+    """Рендер по пользовательскому шаблону (редактор дизайна этикетки)."""
+    p = cfg["printer"]
+    dots_mm = p.get("dpi", 203) / 25.4
+    W = int(p.get("label_width_mm", 58) * dots_mm)
+    H = int(p.get("label_height_mm", 40) * dots_mm)
+    fs = max(0.3, min(3.0, float(p.get("font_scale", 100)) / 100))
+    img = Image.new("1", (W, H), 1)
+    d = ImageDraw.Draw(img)
+    vals = _tpl_values(cfg, data)
+    for el in cfg.get("label_template", []):
+        try:
+            x = int(float(el.get("x_mm", 0)) * dots_mm)
+            y = int(float(el.get("y_mm", 0)) * dots_mm)
+            w = int(float(el.get("w_mm", 0)) * dots_mm)
+            size = float(el.get("size", 14))
+            kind = el.get("type", "text")
+            if kind == "line":
+                d.rectangle([x, y, x + max(1, w), y + max(1, int(size))], fill=0)
+            elif kind == "barcode":
+                bh = int(size * dots_mm)  # для штрихкода size - высота в мм
+                f_bc = _font(max(10, int(12 * fs)), bold=False)
+                _draw_barcode(img, d, data["barcode_value"],
+                              cfg["barcode"].get("type", "ean13"),
+                              x, x + max(40, w), y, y + max(24, bh), f_bc)
+            else:  # text
+                s = str(el.get("text", "")).format_map(vals)
+                if not s.strip():
+                    continue
+                f = _font(max(7, int(size * fs)), el.get("bold", False), el.get("italic", False))
+                if w > 0 and d.textlength(s, font=f) > w:  # ужимаем по ширине
+                    f = _fit_text(d, s, w, f.size, min_size=7,
+                                  bold=el.get("bold", False), italic=el.get("italic", False))
+                tw = d.textlength(s, font=f)
+                align = el.get("align", "left")
+                tx = x + (max(0, w - tw) // 2 if align == "center"
+                          else max(0, w - tw) if align == "right" else 0)
+                d.text((tx, y), s, font=f, fill=0)
+        except Exception:
+            continue  # битый элемент шаблона не валит печать
+    return img
+
+
 def render_label(cfg, data) -> Image.Image:
     """data: dict(name, net_g, gross_g, prod_date, exp_date, barcode_value)."""
+    if cfg.get("label_template"):
+        return render_template(cfg, data)
     p = cfg["printer"]
     dots_mm = p.get("dpi", 203) / 25.4
     W = int(p.get("label_width_mm", 58) * dots_mm)
