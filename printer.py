@@ -133,9 +133,34 @@ def _escpos(img: Image.Image, cfg) -> bytes:
     return one * max(1, int(p.get("copies", 1)))
 
 
-def _windows_gdi(img, printer_name, off_x_mm=0.0, off_y_mm=0.0, src_dpi=203):
+def _gdi_dc(printer_name, w_mm=None, h_mm=None):
+    """DC принтера; если переданы размеры - страница ровно под этикетку,
+    чтобы драйвер не выталкивал пустую этикетку после печати."""
+    if w_mm and h_mm:
+        try:
+            import win32gui
+            h = win32print.OpenPrinter(printer_name)
+            try:
+                dm = win32print.GetPrinter(h, 2)["pDevMode"]
+            finally:
+                win32print.ClosePrinter(h)
+            dm.PaperSize = 256                     # DMPAPER_USER
+            dm.PaperWidth = int(round(w_mm * 10))  # десятые доли мм
+            dm.PaperLength = int(round(h_mm * 10))
+            dm.Fields |= 0x2 | 0x4 | 0x8           # DM_PAPERSIZE|WIDTH|LENGTH
+            return win32ui.CreateDCFromHandle(
+                win32gui.CreateDC("WINSPOOL", printer_name, dm))
+        except Exception:
+            pass  # драйвер не принял свой размер - печатаем как есть
     hdc = win32ui.CreateDC()
     hdc.CreatePrinterDC(printer_name)
+    return hdc
+
+
+def _windows_gdi(img, printer_name, off_x_mm=0.0, off_y_mm=0.0, src_dpi=203, page_fit=True):
+    page_w = img.width * 25.4 / src_dpi if page_fit else None
+    page_h = img.height * 25.4 / src_dpi if page_fit else None
+    hdc = _gdi_dc(printer_name, page_w, page_h)
     pw, ph = hdc.GetDeviceCaps(8), hdc.GetDeviceCaps(10)        # HORZRES/VERTRES
     dpix, dpiy = hdc.GetDeviceCaps(88) or 203, hdc.GetDeviceCaps(90) or 203
     # печатаем в истинном размере (мм в мм): пересчёт из DPI рендера в DPI
@@ -187,7 +212,8 @@ def print_label(img: Image.Image, cfg) -> str:
         _raw_print(name, _zpl(img, cfg))
     elif mode == "windows":
         for _ in range(max(1, int(p.get("copies", 1)))):
-            _windows_gdi(img, name, off_x_mm, off_y_mm, int(p.get("dpi", 203)))
+            _windows_gdi(img, name, off_x_mm, off_y_mm,
+                         int(p.get("dpi", 203)), bool(p.get("page_fit", True)))
     else:
         raise ValueError(f"неизвестный режим печати: {mode}")
     return f"отправлено на принтер: {name}"
