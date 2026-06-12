@@ -36,6 +36,8 @@ DEFAULT_CONFIG = {
         "font_scale": 100,
         "page_fit": True,
         "pause_after_print_s": 0.5,
+        "density": 8,
+        "speed_ips": 3,
         "mode": "escpos",
         "escpos_width_dots": 384,
         "dpi": 203,

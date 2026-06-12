@@ -122,6 +122,10 @@
   <div class="row3">
     <div><label>Масштаб шрифта, %</label>
       <input id="cfgFScale" type="number" min="30" max="300" step="5" value="100"></div>
+    <div><label>Пауза между печатями, с</label>
+      <input id="cfgPause" type="number" min="0" max="10" step="0.5" value="0.5"></div>
+    <div><label>Плотность печати 0–15 (TSPL)</label>
+      <input id="cfgDensity" type="number" min="0" max="15" step="1" value="8"></div>
   </div>
   <h2>Производитель (печатается на этикетке)</h2>
   <div class="grid">
@@ -318,6 +322,8 @@ async function openSettings() {
   $('cfgOffX').value = pr.offset_x_mm || 0;
   $('cfgOffY').value = pr.offset_y_mm || 0;
   $('cfgFScale').value = pr.font_scale || 100;
+  $('cfgPause').value = pr.pause_after_print_s ?? 0.5;
+  $('cfgDensity').value = pr.density ?? 8;
   $('cfgLw').value = pr.label_width_mm; $('cfgLh').value = pr.label_height_mm;
   $('cfgCName').value = co.name; $('cfgCAddr').value = co.address;
   $('cfgCInn').value = co.inn; $('cfgCPhone').value = co.phone;
@@ -379,6 +385,8 @@ $('saveBtn').onclick = async () => {
     cfg.printer.offset_x_mm = +$('cfgOffX').value || 0;
     cfg.printer.offset_y_mm = +$('cfgOffY').value || 0;
     cfg.printer.font_scale = Math.min(300, Math.max(30, +$('cfgFScale').value || 100));
+    cfg.printer.pause_after_print_s = Math.min(10, Math.max(0, +$('cfgPause').value || 0));
+    cfg.printer.density = Math.min(15, Math.max(0, +$('cfgDensity').value ?? 8));
     cfg.printer.label_width_mm = +$('cfgLw').value || 58;
     cfg.printer.label_height_mm = +$('cfgLh').value || 40;
     cfg.company = { name: $('cfgCName').value, address: $('cfgCAddr').value,

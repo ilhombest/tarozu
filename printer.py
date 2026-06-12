@@ -142,9 +142,13 @@ def _img_rows(img: Image.Image):
 def _tspl(img, cfg) -> bytes:
     p = cfg["printer"]
     wb, h, data = _img_rows(img)  # в TSPL BITMAP бит 0 печатается чёрным
+    density = max(0, min(15, int(p.get("density", 8))))
+    speed = max(1, min(6, int(p.get("speed_ips", 3))))
     head = (
         f"SIZE {p['label_width_mm']} mm,{p['label_height_mm']} mm\r\n"
         f"GAP {p.get('gap_mm', 2)} mm,0\r\n"
+        f"DENSITY {density}\r\n"   # нагрев головки 0-15 (меньше = холоднее)
+        f"SPEED {speed}\r\n"       # скорость, дюйм/с (меньше = качественнее)
         "DIRECTION 1\r\nCLS\r\n"
     ).encode("ascii")
     bitmap = f"BITMAP 0,0,{wb},{h},0,".encode("ascii") + data + b"\r\n"
