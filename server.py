@@ -49,9 +49,9 @@ DEFAULT_CONFIG = {
     "barcode": {"type": "ean13", "prefix": "22"},
     "company": {
         "name": "ООО \"Птицефабрика\"",
-        "address": "г. Ташкент, ул. Примерная, 1",
+        "address": "г. Худжанд",
         "inn": "ИНН 123456789",
-        "phone": "+998 90 000-00-00",
+        "phone": "+992 92 777 64 13",
     },
     "server": {"host": "127.0.0.1", "port": 8077, "open_browser": True},
 }

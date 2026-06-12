@@ -12,6 +12,7 @@
 import re
 import threading
 import time
+from collections import deque
 
 try:
     import serial
@@ -43,7 +44,9 @@ class ScaleReader(threading.Thread):
         self.error = ""
         self.port_in_use = ""
         self.last_raw = ""
+        self.raw_hist = deque(maxlen=8)
         self._zero_streak = 0
+        self._last_gross_t = 0.0
         self._stop = threading.Event()
 
     def snapshot(self):
@@ -55,6 +58,7 @@ class ScaleReader(threading.Thread):
                 "error": self.error,
                 "port": self.port_in_use,
                 "raw": self.last_raw,
+                "raw_hist": list(self.raw_hist),
             }
 
     def stop(self):
@@ -149,6 +153,7 @@ class ScaleReader(threading.Thread):
             return
         proto = self.cfg.get("protocol", "auto")
         parsed = None
+        kind = ""
         if proto in ("cas", "auto"):
             m = CAS_RE.search(line)
             if m:
@@ -156,6 +161,7 @@ class ScaleReader(threading.Thread):
                 unit = (m.group(4) or "kg").lower()
                 grams = value * (1000 if unit == "kg" else 1)
                 parsed = (grams, m.group(1).upper() == "ST")
+                kind = m.group(2).upper()  # GS - брутто, NT - нетто
         if parsed is None and proto in ("generic", "auto"):
             m = NUM_RE.search(line)
             if m:
@@ -166,8 +172,18 @@ class ScaleReader(threading.Thread):
         if parsed is None:
             return
         grams, stable = parsed
+        # весы с заведённой тарой шлют вперемешку брутто (GS) и нетто (NT):
+        # показываем только брутто, иначе вес "играет" между двумя числами
+        now = time.time()
+        if kind == "GS":
+            self._last_gross_t = now
+        elif kind == "NT" and now - self._last_gross_t < 1.5:
+            with self.lock:
+                self.raw_hist.append(line[:80])
+            return
         with self.lock:
             self.last_raw = line[:80]
+            self.raw_hist.append(line[:80])
             self.connected = True
             self.error = ""
             # дрожание пустых весов и кадры тары (0...2 г) считаем чистым нулём
