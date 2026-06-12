@@ -212,7 +212,18 @@ class App:
                 except Exception as e:
                     last_err = e
             else:
-                raise RuntimeError(f"принтер не ответил после 3 попыток: {last_err}")
+                # спрашиваем у Windows, на что жалуется принтер
+                why = ""
+                try:
+                    st = printer.printer_status(self.cfg)
+                    if st.get("ok"):
+                        why = "; принтер: " + ", ".join(st["status"])
+                        bad = [f"№{j['id']}: {', '.join(j['status'])}" for j in st["jobs"]]
+                        if bad:
+                            why += " | очередь: " + "; ".join(bad)
+                except Exception:
+                    pass
+                raise RuntimeError(f"печать не прошла: {last_err}{why}")
             # короткая пауза, чтобы быстрые повторные печати не душили драйвер
             time.sleep(float(self.cfg["printer"].get("pause_after_print_s", 0.5)))
         return {"ok": True, "message": msg, "label": data}
@@ -251,6 +262,11 @@ def make_handler(app: App):
                     "printers": printer.list_printers(),
                     "config": app.cfg,
                 })
+            elif path == "/api/printerstatus":
+                try:
+                    self._json(printer.printer_status(app.cfg))
+                except Exception as e:
+                    self._json({"ok": False, "error": str(e)})
             elif path.startswith("/api/preview"):
                 self._preview()
             elif path in ("/", "/index.html"):
@@ -287,6 +303,9 @@ def make_handler(app: App):
                     self._json({"ok": True})
                 elif self.path == "/api/testprint":
                     self._json(app.do_testprint())
+                elif self.path == "/api/clearqueue":
+                    n = printer.clear_queue(app.cfg)
+                    self._json({"ok": True, "message": f"снято заданий: {n}"})
                 else:
                     self.send_error(404)
             except Exception as e:

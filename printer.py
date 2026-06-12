@@ -43,6 +43,69 @@ def _printer_name(cfg):
     return win32print.GetDefaultPrinter()
 
 
+_PRN_STATUS = {
+    0x1: "пауза", 0x2: "ошибка", 0x8: "замятие бумаги", 0x10: "нет бумаги",
+    0x40: "проблема с бумагой", 0x80: "принтер офлайн", 0x200: "занят",
+    0x400: "печатает", 0x1000: "недоступен", 0x4000: "обработка", 0x10000: "прогрев",
+    0x100000: "требуется вмешательство", 0x200000: "нет памяти",
+    0x400000: "открыта крышка",
+}
+_JOB_STATUS = {
+    0x1: "пауза", 0x2: "ошибка", 0x4: "удаляется", 0x8: "передаётся",
+    0x10: "печатается", 0x20: "принтер офлайн", 0x40: "нет бумаги",
+    0x80: "напечатано", 0x100: "удалено", 0x200: "порт не отвечает",
+    0x400: "требуется вмешательство", 0x800: "перезапуск",
+}
+
+
+def _decode(flags, table):
+    return [name for bit, name in table.items() if flags & bit]
+
+
+def printer_status(cfg):
+    """Опрашивает Windows: состояние принтера и заданий в его очереди -
+    чтобы при сбое было видно, на что именно жалуется принтер."""
+    if win32print is None:
+        return {"ok": False, "error": "статус доступен только на Windows"}
+    name = _printer_name(cfg)
+    h = win32print.OpenPrinter(name)
+    try:
+        info = win32print.GetPrinter(h, 2)
+        jobs = win32print.EnumJobs(h, 0, 99, 1)
+    finally:
+        win32print.ClosePrinter(h)
+    return {
+        "ok": True,
+        "printer": name,
+        "status": _decode(info["Status"], _PRN_STATUS) or ["готов"],
+        "raw_status": info["Status"],
+        "jobs": [{
+            "id": j["JobId"],
+            "doc": j.get("pDocument") or "",
+            "status": _decode(j["Status"], _JOB_STATUS) or [f"код {j['Status']}"],
+            "raw_status": j["Status"],
+        } for j in jobs],
+    }
+
+
+def clear_queue(cfg):
+    """Снимает все задания из очереди принтера (зависшие в т.ч.)."""
+    if win32print is None:
+        raise RuntimeError("доступно только на Windows")
+    name = _printer_name(cfg)
+    h = win32print.OpenPrinter(name)
+    try:
+        jobs = win32print.EnumJobs(h, 0, 99, 1)
+        for j in jobs:
+            try:
+                win32print.SetJob(h, j["JobId"], 0, None, 5)  # JOB_CONTROL_DELETE
+            except Exception:
+                pass
+        return len(jobs)
+    finally:
+        win32print.ClosePrinter(h)
+
+
 def _serial_print(cfg, payload: bytes):
     """Прямая печать на принтер, подключённый через COM-порт (минуя Windows)."""
     if serial is None:

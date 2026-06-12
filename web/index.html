@@ -141,6 +141,10 @@
     <button id="testBtn" style="background:#243246;color:#b9c6d4">🖨 Тест печати</button>
     <button id="saveBtn">💾 Сохранить настройки</button>
   </div>
+  <div class="btnRow">
+    <button id="statusBtn" style="background:#243246;color:#b9c6d4">ℹ Статус принтера</button>
+    <button id="clearqBtn" style="background:#3a2430;color:#e08585">🧹 Очистить очередь печати</button>
+  </div>
   <div id="setupStatus"></div>
 </div>
 
@@ -335,6 +339,28 @@ $('testBtn').onclick = async () => {
     const r = await (await fetch('/api/testprint', {method: 'POST'})).json();
     if (!r.ok) throw new Error(r.error);
     st.className = 'ok'; st.textContent = '✓ ' + r.message + ' — рамка должна совпасть с краями этикетки';
+  } catch (e) { st.className = 'err'; st.textContent = '✗ ' + e.message; }
+};
+
+$('statusBtn').onclick = async () => {
+  const st = $('setupStatus'); st.className = ''; st.textContent = 'опрос принтера…';
+  try {
+    const r = await (await fetch('/api/printerstatus')).json();
+    if (!r.ok) throw new Error(r.error);
+    let t = `«${r.printer}»: ${r.status.join(', ')}`;
+    t += r.jobs.length
+      ? ' | очередь: ' + r.jobs.map(j => `№${j.id} — ${j.status.join(', ')}`).join('; ')
+      : ' | очередь пуста';
+    st.className = 'ok'; st.textContent = t;
+  } catch (e) { st.className = 'err'; st.textContent = '✗ ' + e.message; }
+};
+
+$('clearqBtn').onclick = async () => {
+  const st = $('setupStatus'); st.className = ''; st.textContent = 'очистка очереди…';
+  try {
+    const r = await (await fetch('/api/clearqueue', {method: 'POST'})).json();
+    if (!r.ok) throw new Error(r.error);
+    st.className = 'ok'; st.textContent = '✓ ' + r.message;
   } catch (e) { st.className = 'err'; st.textContent = '✗ ' + e.message; }
 };
 
