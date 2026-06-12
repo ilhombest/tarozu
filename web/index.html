@@ -7,13 +7,15 @@
 <style>
   * { box-sizing: border-box; margin: 0; }
   body { font-family: "Segoe UI", Arial, sans-serif; background: #10151c; color: #e8edf2;
-         display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 16px; }
-  h1 { font-size: 20px; font-weight: 600; color: #8fa3b8; margin-bottom: 12px; }
+         min-height: 100vh; padding: 10px; }
+  .topbar { width: 100%; display: flex; justify-content: space-between;
+            align-items: center; margin-bottom: 12px; }
+  .topbar h1 { font-size: 20px; font-weight: 600; color: #8fa3b8; margin: 0; }
   .panel { background: #1a2230; border-radius: 14px; padding: 18px 22px; width: 100%;
-           max-width: 760px; margin-bottom: 14px; }
-  #weight { font-size: 14vw; max-font-size: 120px; line-height: 1.05; font-weight: 700;
+           margin-bottom: 14px; }
+  #weight { font-size: 16vw; line-height: 1.05; font-weight: 700;
             text-align: center; font-variant-numeric: tabular-nums; }
-  @media (min-width: 900px) { #weight { font-size: 120px; } }
+  @media (min-width: 1000px) { #weight { font-size: 160px; } }
   #weight.stable { color: #5ad87a; }
   #weight.moving { color: #f0c33c; }
   #weight.offline { color: #e25555; font-size: 36px; }
@@ -33,144 +35,41 @@
   #previewWrap { text-align: center; }
   #preview { max-width: 100%; background: #fff; border-radius: 6px; min-height: 60px; }
   details summary { cursor: pointer; color: #8fa3b8; }
-  .topbar { width: 100%; max-width: 760px; display: flex; justify-content: space-between;
-            align-items: center; margin-bottom: 12px; }
-  .topbar h1 { margin: 0; }
   #settingsBtn { background: #243246; color: #b9c6d4; border: 1px solid #2c3a4f;
                  border-radius: 8px; padding: 8px 14px; font-size: 15px; cursor: pointer; }
-  #settings h2 { font-size: 16px; color: #8fa3b8; margin: 14px 0 8px; }
-  #settings h2:first-child { margin-top: 0; }
-  table.prod { width: 100%; border-collapse: collapse; }
-  table.prod th { font-size: 12px; color: #8fa3b8; text-align: left; padding: 2px 4px; }
-  table.prod td { padding: 2px 4px; }
-  table.prod input { padding: 6px; font-size: 15px; }
-  .delBtn { background: #3a2430; color: #e25555; border: none; border-radius: 6px;
-            padding: 6px 10px; cursor: pointer; font-size: 15px; }
-  .btnRow { display: flex; gap: 10px; margin-top: 14px; }
-  .btnRow button { flex: 1; padding: 12px; font-size: 17px; font-weight: 600;
-                   border: none; border-radius: 8px; cursor: pointer; }
-  #saveBtn { background: #2f8f4e; color: #fff; }
-  #addProdBtn { background: #243246; color: #b9c6d4; }
-  #setupStatus { margin-top: 8px; text-align: center; min-height: 20px; font-size: 14px; }
-  #setupStatus.ok { color: #5ad87a; } #setupStatus.err { color: #e25555; }
+  #licWrap { position: fixed; inset: 0; background: rgba(8, 12, 18, .96); z-index: 100;
+             display: flex; align-items: center; justify-content: center; }
+  #licBox { background: #1a2230; border-radius: 14px; padding: 28px; width: min(440px, 92vw);
+            text-align: center; }
+  #licBox h2 { color: #e8edf2; margin-bottom: 10px; }
+  #licChallenge { font-size: 44px; font-weight: 700; letter-spacing: 6px;
+                  color: #f0c33c; margin: 14px 0; font-variant-numeric: tabular-nums; }
+  #licAnswer { text-align: center; font-size: 22px; }
+  #licBtn { width: 100%; margin-top: 14px; padding: 14px; font-size: 19px; font-weight: 700;
+            border: none; border-radius: 10px; background: #2f8f4e; color: #fff; cursor: pointer; }
+  #licStatus { margin-top: 10px; min-height: 20px; font-size: 14px; }
+  #licStatus.err { color: #e25555; } #licStatus.ok { color: #5ad87a; }
+  #licInfo { color: #8fa3b8; font-size: 13px; margin-top: 8px; }
 </style>
 </head>
 <body>
-<div class="topbar">
-  <h1>TAROZU — весовой терминал</h1>
-  <button id="settingsBtn">⚙ Настройки</button>
+<div id="licWrap" style="display:none">
+  <div id="licBox">
+    <h2>Активация программы</h2>
+    <div>Проверочное слово:</div>
+    <div id="licChallenge">····</div>
+    <input id="licAnswer" inputmode="numeric" placeholder="введите код ответа">
+    <button id="licBtn">Активировать</button>
+    <div id="licStatus"></div>
+  </div>
 </div>
 
-<div class="panel" id="settings" style="display:none">
-  <h2>Весы</h2>
-  <div class="row3">
-    <div><label>Протокол</label>
-      <select id="cfgProto">
-        <option value="auto">auto — определить самому</option>
-        <option value="cas">CAS</option>
-        <option value="generic">generic — любой поток</option>
-        <option value="demo">demo — без весов</option>
-      </select></div>
-    <div><label>COM-порт</label><select id="cfgPort"></select></div>
-    <div><label>Скорость (бод)</label>
-      <select id="cfgBaud">
-        <option>1200</option><option>2400</option><option>4800</option>
-        <option selected>9600</option><option>19200</option><option>38400</option>
-        <option>57600</option><option>115200</option>
-      </select></div>
+<div class="topbar">
+  <h1>TAROZU — весовой терминал</h1>
+  <div style="display:flex;gap:10px;align-items:center">
+    <span id="licInfo"></span>
+    <button id="settingsBtn">⚙ Настройки</button>
   </div>
-  <h2>Принтер</h2>
-  <div class="row3">
-    <div><label>Принтер</label><select id="cfgPrinter"></select></div>
-    <div><label>Режим печати</label>
-      <select id="cfgMode">
-        <option value="escpos">ESC/POS (чековый / встроенный в POS)</option>
-        <option value="tspl">TSPL (Xprinter и кит. принтеры)</option>
-        <option value="zpl">ZPL (Zebra)</option>
-        <option value="windows">Драйвер Windows</option>
-        <option value="file">В файл (отладка)</option>
-      </select></div>
-    <div><label>Этикетка, мм (Ш×В)</label>
-      <div style="display:flex;gap:6px">
-        <input id="cfgLw" type="number" min="20" max="120" value="58">
-        <input id="cfgLh" type="number" min="20" max="120" value="40">
-      </div></div>
-  </div>
-  <div class="row3">
-    <div><label>Подключение принтера</label><select id="cfgPPort"></select></div>
-    <div><label>Скорость порта принтера</label>
-      <select id="cfgPBaud">
-        <option>9600</option><option>19200</option><option>38400</option>
-        <option>57600</option><option>115200</option>
-      </select></div>
-    <div><label>Копий этикетки</label>
-      <input id="cfgCopies" type="number" min="1" max="10" value="1"></div>
-  </div>
-  <div class="row3">
-    <div><label>Поворот печати</label>
-      <select id="cfgRotate">
-        <option value="0">без поворота</option>
-        <option value="90">90°</option>
-        <option value="180">180°</option>
-        <option value="270">270°</option>
-      </select></div>
-    <div><label>Сдвиг вправо, мм (− влево)</label>
-      <input id="cfgOffX" type="number" step="0.5" value="0"></div>
-    <div><label>Сдвиг вниз, мм (− вверх)</label>
-      <input id="cfgOffY" type="number" step="0.5" value="0"></div>
-  </div>
-  <div class="row3">
-    <div><label>Масштаб шрифта, %</label>
-      <input id="cfgFScale" type="number" min="30" max="300" step="5" value="100"></div>
-    <div><label>Пауза между печатями, с</label>
-      <input id="cfgPause" type="number" min="0" max="10" step="0.5" value="0.5"></div>
-    <div><label>Плотность печати 0–15 (TSPL)</label>
-      <input id="cfgDensity" type="number" min="0" max="15" step="1" value="8"></div>
-  </div>
-  <h2>Производитель (печатается на этикетке)</h2>
-  <div class="grid">
-    <div><label>Название</label><input id="cfgCName"></div>
-    <div><label>Адрес</label><input id="cfgCAddr"></div>
-    <div><label>ИНН</label><input id="cfgCInn"></div>
-    <div><label>Телефон</label><input id="cfgCPhone"></div>
-  </div>
-  <h2>Дизайн этикетки</h2>
-  <table class="prod">
-    <thead><tr><th style="width:92px">Элемент</th><th>Текст</th>
-      <th style="width:52px">X, мм</th><th style="width:52px">Y, мм</th>
-      <th style="width:56px">Шир, мм</th><th style="width:52px">Размер</th>
-      <th style="width:30px" title="Полужирный">Ж</th><th style="width:30px" title="Курсив">К</th>
-      <th style="width:86px">Выравн.</th><th></th></tr></thead>
-    <tbody id="tplRows"></tbody>
-  </table>
-  <div style="color:#8fa3b8;font-size:12px;margin-top:6px">
-    Подстановки в тексте: {name} {net_kg} {gross_kg} {prod_date} {exp_date}
-    {company_name} {company_address} {company_inn} {company_phone}.
-    «Размер»: для текста — размер шрифта; для штрихкода — высота в мм; для линии — толщина.
-  </div>
-  <div class="btnRow">
-    <button id="addTplBtn">+ Элемент этикетки</button>
-  </div>
-  <div style="text-align:center;margin-top:8px">
-    <img id="tplPreview" alt="" style="background:#fff;border:1px solid #2c3a4f;max-width:100%;image-rendering:pixelated">
-  </div>
-
-  <h2>Товары</h2>
-  <table class="prod">
-    <thead><tr><th style="width:60px">PLU</th><th>Название</th>
-      <th style="width:90px">Срок, дн</th><th style="width:90px">Тара, г</th><th></th></tr></thead>
-    <tbody id="prodRows"></tbody>
-  </table>
-  <div class="btnRow">
-    <button id="addProdBtn">+ Добавить товар</button>
-    <button id="testBtn" style="background:#243246;color:#b9c6d4">🖨 Тест печати</button>
-    <button id="saveBtn">💾 Сохранить настройки</button>
-  </div>
-  <div class="btnRow">
-    <button id="statusBtn" style="background:#243246;color:#b9c6d4">ℹ Статус принтера</button>
-    <button id="clearqBtn" style="background:#3a2430;color:#e08585">🧹 Очистить очередь печати</button>
-  </div>
-  <div id="setupStatus"></div>
 </div>
 
 <div class="panel">
@@ -224,6 +123,37 @@ let products = [], state = {connected:false, weight_g:0, stable:false};
 
 const $ = id => document.getElementById(id);
 const today = () => new Date().toISOString().slice(0,10);
+
+$('settingsBtn').onclick = () => location.href = '/settings';
+
+// ----- лицензия -----
+async function checkLicense() {
+  try {
+    const r = await (await fetch('/api/license')).json();
+    if (r.active) {
+      $('licWrap').style.display = 'none';
+      $('licInfo').textContent = `осталось ${r.remaining_h} ч`;
+    } else {
+      $('licInfo').textContent = '';
+      $('licChallenge').textContent = r.challenge;
+      $('licWrap').style.display = '';
+    }
+  } catch (e) {}
+}
+
+$('licBtn').onclick = async () => {
+  const st = $('licStatus'); st.className = ''; st.textContent = 'проверка…';
+  try {
+    const r = await (await fetch('/api/license', {method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({answer: $('licAnswer').value.trim()})})).json();
+    if (!r.ok) throw new Error(r.error);
+    st.className = 'ok'; st.textContent = `✓ Активировано, осталось ${r.remaining_h} ч`;
+    $('licAnswer').value = '';
+    setTimeout(checkLicense, 800);
+  } catch (e) { st.className = 'err'; st.textContent = '✗ ' + e.message; }
+};
+$('licAnswer').addEventListener('keydown', e => { if (e.key === 'Enter') $('licBtn').click(); });
 
 function currentProduct() {
   return products.find(p => p.plu == $('product').value);
@@ -306,186 +236,8 @@ $('printBtn').onclick = async () => {
 $('prodDate').onchange = () => { recalcExp(); schedulePreview(); };
 $('expDate').onchange = $('tare').oninput = schedulePreview;
 
-// ----- настройки -----
-let cfg = null;
-
-function prodRow(p = {}) {
-  const tr = document.createElement('tr');
-  tr.innerHTML = `
-    <td><input type="number" min="1" class="pPlu" value="${p.plu ?? ''}"></td>
-    <td><input class="pName" value="${(p.name ?? '').replace(/"/g,'&quot;')}"></td>
-    <td><input type="number" min="1" class="pShelf" value="${p.shelf_days ?? 5}"></td>
-    <td><input type="number" min="0" class="pTare" value="${p.tare_g ?? 0}"></td>
-    <td><button class="delBtn" title="удалить">✕</button></td>`;
-  tr.querySelector('.delBtn').onclick = () => tr.remove();
-  return tr;
-}
-
-function tplRow(el = {}) {
-  const tr = document.createElement('tr');
-  const esc = s => String(s ?? '').replace(/"/g, '&quot;');
-  tr.innerHTML = `
-    <td><select class="tType">
-      <option value="text">Текст</option>
-      <option value="barcode">Штрихкод</option>
-      <option value="line">Линия</option>
-    </select></td>
-    <td><input class="tText" value="${esc(el.text)}"></td>
-    <td><input class="tX" type="number" step="0.5" value="${el.x_mm ?? 0}"></td>
-    <td><input class="tY" type="number" step="0.5" value="${el.y_mm ?? 0}"></td>
-    <td><input class="tW" type="number" step="0.5" value="${el.w_mm ?? 0}"></td>
-    <td><input class="tSize" type="number" step="1" value="${el.size ?? 14}"></td>
-    <td style="text-align:center"><input class="tBold" type="checkbox" ${el.bold ? 'checked' : ''}></td>
-    <td style="text-align:center"><input class="tItalic" type="checkbox" ${el.italic ? 'checked' : ''}></td>
-    <td><select class="tAlign">
-      <option value="left">слева</option>
-      <option value="center">центр</option>
-      <option value="right">справа</option>
-    </select></td>
-    <td><button class="delBtn" title="удалить">✕</button></td>`;
-  tr.querySelector('.tType').value = el.type || 'text';
-  tr.querySelector('.tAlign').value = el.align || 'left';
-  tr.querySelector('.delBtn').onclick = () => tr.remove();
-  return tr;
-}
-
-function collectTemplate() {
-  return [...$('tplRows').children].map(tr => ({
-    type: tr.querySelector('.tType').value,
-    text: tr.querySelector('.tText').value,
-    x_mm: +tr.querySelector('.tX').value || 0,
-    y_mm: +tr.querySelector('.tY').value || 0,
-    w_mm: +tr.querySelector('.tW').value || 0,
-    size: +tr.querySelector('.tSize').value || 14,
-    bold: tr.querySelector('.tBold').checked,
-    italic: tr.querySelector('.tItalic').checked,
-    align: tr.querySelector('.tAlign').value,
-  }));
-}
-
-function refreshTplPreview() {
-  const plu = products[0]?.plu ?? 1;
-  $('tplPreview').src = `/api/preview?plu=${plu}&gross_g=1190&_=${Date.now()}`;
-}
-
-async function openSettings() {
-  const setup = await (await fetch('/api/setup')).json();
-  cfg = setup.config;
-  const sc = cfg.scale, pr = cfg.printer, co = cfg.company;
-  $('cfgProto').value = sc.protocol;
-  $('cfgBaud').value = sc.baudrate;
-  $('cfgPort').innerHTML = '<option value="auto">auto — найти автоматически</option>' +
-    setup.ports.map(p => `<option value="${p.port}">${p.port} — ${p.desc}</option>`).join('');
-  $('cfgPort').value = setup.ports.some(p => p.port === sc.port) ? sc.port : 'auto';
-  $('cfgPrinter').innerHTML = '<option value="">(принтер по умолчанию)</option>' +
-    setup.printers.map(n => `<option value="${n}">${n}</option>`).join('');
-  $('cfgPrinter').value = setup.printers.includes(pr.name) ? pr.name : '';
-  $('cfgMode').value = pr.mode;
-  $('cfgPPort').innerHTML = '<option value="">через драйвер Windows</option>' +
-    setup.ports.map(p => `<option value="${p.port}">напрямую: ${p.port} — ${p.desc}</option>`).join('');
-  $('cfgPPort').value = setup.ports.some(p => p.port === pr.port) ? pr.port : '';
-  $('cfgPBaud').value = pr.baudrate || 9600;
-  $('cfgCopies').value = pr.copies || 1;
-  $('cfgRotate').value = String(pr.rotate || 0);
-  $('cfgOffX').value = pr.offset_x_mm || 0;
-  $('cfgOffY').value = pr.offset_y_mm || 0;
-  $('cfgFScale').value = pr.font_scale || 100;
-  $('cfgPause').value = pr.pause_after_print_s ?? 0.5;
-  $('cfgDensity').value = pr.density ?? 8;
-  $('cfgLw').value = pr.label_width_mm; $('cfgLh').value = pr.label_height_mm;
-  $('cfgCName').value = co.name; $('cfgCAddr').value = co.address;
-  $('cfgCInn').value = co.inn; $('cfgCPhone').value = co.phone;
-  const tb = $('prodRows'); tb.innerHTML = '';
-  products.forEach(p => tb.appendChild(prodRow(p)));
-  const tt = $('tplRows'); tt.innerHTML = '';
-  (cfg.label_template || []).forEach(el => tt.appendChild(tplRow(el)));
-  refreshTplPreview();
-  $('settings').style.display = '';
-}
-
-$('addTplBtn').onclick = () =>
-  $('tplRows').appendChild(tplRow({type: 'text', text: 'Новый текст', x_mm: 1, y_mm: 1, w_mm: 38, size: 14}));
-
-$('settingsBtn').onclick = () => {
-  if ($('settings').style.display === 'none') openSettings();
-  else $('settings').style.display = 'none';
-};
-
-$('addProdBtn').onclick = () => $('prodRows').appendChild(prodRow({plu: '', shelf_days: 5, tare_g: 10}));
-
-$('testBtn').onclick = async () => {
-  const st = $('setupStatus'); st.className = ''; st.textContent = 'печать теста…';
-  try {
-    const r = await (await fetch('/api/testprint', {method: 'POST'})).json();
-    if (!r.ok) throw new Error(r.error);
-    st.className = 'ok'; st.textContent = '✓ ' + r.message + ' — рамка должна совпасть с краями этикетки';
-  } catch (e) { st.className = 'err'; st.textContent = '✗ ' + e.message; }
-};
-
-$('statusBtn').onclick = async () => {
-  const st = $('setupStatus'); st.className = ''; st.textContent = 'опрос принтера…';
-  try {
-    const r = await (await fetch('/api/printerstatus')).json();
-    if (!r.ok) throw new Error(r.error);
-    let t = `«${r.printer}»: ${r.status.join(', ')}`;
-    t += r.jobs.length
-      ? ' | очередь: ' + r.jobs.map(j => `№${j.id} — ${j.status.join(', ')}`).join('; ')
-      : ' | очередь пуста';
-    st.className = 'ok'; st.textContent = t;
-  } catch (e) { st.className = 'err'; st.textContent = '✗ ' + e.message; }
-};
-
-$('clearqBtn').onclick = async () => {
-  const st = $('setupStatus'); st.className = ''; st.textContent = 'очистка очереди…';
-  try {
-    const r = await (await fetch('/api/clearqueue', {method: 'POST'})).json();
-    if (!r.ok) throw new Error(r.error);
-    st.className = 'ok'; st.textContent = '✓ ' + r.message;
-  } catch (e) { st.className = 'err'; st.textContent = '✗ ' + e.message; }
-};
-
-$('saveBtn').onclick = async () => {
-  const st = $('setupStatus'); st.className = ''; st.textContent = 'сохранение…';
-  try {
-    cfg.scale.protocol = $('cfgProto').value;
-    cfg.scale.port = $('cfgPort').value;
-    cfg.scale.baudrate = +$('cfgBaud').value;
-    cfg.printer.name = $('cfgPrinter').value;
-    cfg.printer.mode = $('cfgMode').value;
-    cfg.printer.port = $('cfgPPort').value;
-    cfg.printer.baudrate = +$('cfgPBaud').value || 9600;
-    cfg.printer.copies = Math.max(1, +$('cfgCopies').value || 1);
-    cfg.printer.rotate = +$('cfgRotate').value || 0;
-    cfg.printer.offset_x_mm = +$('cfgOffX').value || 0;
-    cfg.printer.offset_y_mm = +$('cfgOffY').value || 0;
-    cfg.printer.font_scale = Math.min(300, Math.max(30, +$('cfgFScale').value || 100));
-    cfg.printer.pause_after_print_s = Math.min(10, Math.max(0, +$('cfgPause').value || 0));
-    cfg.printer.density = Math.min(15, Math.max(0, +$('cfgDensity').value ?? 8));
-    cfg.printer.label_width_mm = +$('cfgLw').value || 58;
-    cfg.printer.label_height_mm = +$('cfgLh').value || 40;
-    cfg.company = { name: $('cfgCName').value, address: $('cfgCAddr').value,
-                    inn: $('cfgCInn').value, phone: $('cfgCPhone').value };
-    cfg.label_template = collectTemplate();
-    const prods = [...$('prodRows').children].map(tr => ({
-      plu: +tr.querySelector('.pPlu').value || 0,
-      name: tr.querySelector('.pName').value.trim(),
-      shelf_days: +tr.querySelector('.pShelf').value || 5,
-      tare_g: +tr.querySelector('.pTare').value || 0,
-    })).filter(p => p.name);
-    if (!prods.length) throw new Error('добавьте хотя бы один товар');
-    let r = await (await fetch('/api/config', {method:'POST',
-      headers:{'Content-Type':'application/json'}, body: JSON.stringify(cfg)})).json();
-    if (!r.ok) throw new Error(r.error);
-    r = await (await fetch('/api/products', {method:'POST',
-      headers:{'Content-Type':'application/json'}, body: JSON.stringify(prods)})).json();
-    if (!r.ok) throw new Error(r.error);
-    await loadProducts();
-    lastPrevKey = ''; schedulePreview();
-    refreshTplPreview();
-    st.className = 'ok'; st.textContent = '✓ Сохранено и применено';
-  } catch (e) { st.className = 'err'; st.textContent = '✗ ' + e.message; }
-};
-
+checkLicense();
+setInterval(checkLicense, 60000);
 loadProducts().then(() => { poll(); setInterval(poll, 150); setInterval(schedulePreview, 1500); });
 </script>
 </body>

@@ -133,6 +133,67 @@ def load_json(name, default):
         return default
 
 
+class License:
+    """Часовая лицензия: проверочное слово - случайное 4-значное число.
+    Ответ = слово * 6413  -> +1000 часов работы;
+    ответ = слово * 927776413 -> +10000 часов.
+    Остаток часов списывается по таймеру работы программы и хранится
+    в license.json - при перезапуске код заново не спрашивается."""
+
+    def __init__(self):
+        d = load_json("license.json", {"remaining_s": 0, "challenge": 0})
+        self.lock = threading.Lock()
+        self.remaining_s = max(0.0, float(d.get("remaining_s", 0) or 0))
+        self.challenge = int(d.get("challenge", 0) or 0)
+        if not 1000 <= self.challenge <= 9999:
+            self._new_challenge()
+        threading.Thread(target=self._tick, daemon=True).start()
+
+    def _new_challenge(self):
+        import random
+        self.challenge = random.randint(1000, 9999)
+        self._save()
+
+    def _save(self):
+        save_json("license.json", {"remaining_s": int(self.remaining_s),
+                                   "challenge": self.challenge})
+
+    def _tick(self):
+        while True:
+            time.sleep(60)
+            with self.lock:
+                if self.remaining_s > 0:
+                    self.remaining_s = max(0.0, self.remaining_s - 60)
+                    self._save()
+
+    def state(self):
+        with self.lock:
+            return {"ok": True, "active": self.remaining_s > 0,
+                    "remaining_h": round(self.remaining_s / 3600, 1),
+                    "challenge": self.challenge}
+
+    def activate(self, answer):
+        with self.lock:
+            try:
+                a = int(str(answer).strip())
+            except (TypeError, ValueError):
+                raise ValueError("код ответа должен быть числом")
+            if a == self.challenge * 6413:
+                self.remaining_s += 1000 * 3600
+            elif a == self.challenge * 927776413:
+                self.remaining_s += 10000 * 3600
+            else:
+                raise ValueError("неверный код ответа")
+            self._new_challenge()  # на следующую активацию - новое слово
+            return {"ok": True, "active": True,
+                    "remaining_h": round(self.remaining_s / 3600, 1)}
+
+    def require(self):
+        with self.lock:
+            if self.remaining_s <= 0:
+                raise ValueError("программа не активирована: введите код на главном экране")
+
+
 class App:
     def __init__(self):
         self.cfg = _merge_defaults(load_json("config.json", DEFAULT_CONFIG), DEFAULT_CONFIG)
@@ -140,6 +201,7 @@ class App:
         self.reader = scale.ScaleReader(self._scale_cfg(self.cfg))
         self.reader.start()
         self.print_lock = threading.Lock()
+        self.license = License()
 
     @staticmethod
     def _scale_cfg(cfg):
@@ -223,6 +285,7 @@ class App:
         }
 
     def do_print(self, req):
+        self.license.require()
         data = self.build_label_data(req)
         img = label.render_label(self.cfg, data)
         with self.print_lock:
@@ -287,6 +350,8 @@ def make_handler(app: App):
                     "printers": printer.list_printers(),
                     "config": app.cfg,
                 })
+            elif path == "/api/license":
+                self._json(app.license.state())
             elif path == "/api/printerstatus":
                 try:
                     self._json(printer.printer_status(app.cfg))
@@ -296,6 +361,8 @@ def make_handler(app: App):
                 self._preview()
             elif path in ("/", "/index.html"):
                 self._file(os.path.join(web_root, "index.html"), "text/html; charset=utf-8")
+            elif path in ("/settings", "/settings.html"):
+                self._file(os.path.join(web_root, "settings.html"), "text/html; charset=utf-8")
             else:
                 self.send_error(404)
 
@@ -328,6 +395,8 @@ def make_handler(app: App):
                     self._json({"ok": True})
                 elif self.path == "/api/testprint":
                     self._json(app.do_testprint())
+                elif self.path == "/api/license":
+                    self._json(app.license.activate(self._read_body().get("answer")))
                 elif self.path == "/api/clearqueue":
                     n = printer.clear_queue(app.cfg)
                     self._json({"ok": True, "message": f"снято заданий: {n}"})
